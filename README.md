@@ -19,6 +19,7 @@
 
 ## 🤩 팀원들(Team Members)
 
+|                                     Lead/BE Developer                                    |                                               BE Developer                                               |                                       BE Developer                                      |                                     BE Developer                                    |
 |:-------------------------------------------------------------------------------:|:-------------------------------------------------------------------------------------------------------:|:------------------------------------------------------------------------------:|:--------------------------------------------------------------------------:|:------------------------------------------------------------------------------------:|
 | [윤희준](https://github.com/uni-j-uni) | [박주용](https://github.com/imjuyongp) | [김종혁](https://github.com/kjh015) | [김준혁](https://github.com/nanchano0607) |
 | <img src="https://avatars.githubusercontent.com/u/118972548?v=4" width="300" /> | <img src="https://avatars.githubusercontent.com/u/158154226?s=96&v=4" width="300" /> | <img src="https://avatars.githubusercontent.com/u/74913358?s=96&v=4" width="300" /> | <img src="https://avatars.githubusercontent.com/u/158154226?s=96&v=4" width="300" /> |

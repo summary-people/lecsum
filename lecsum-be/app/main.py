@@ -3,7 +3,7 @@
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from db.database import engine, Base
-from routers import upload_router
+from routers import upload_router, quiz_router
 
 import os
 from dotenv import load_dotenv
@@ -16,6 +16,7 @@ app = FastAPI()
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
 app.include_router(upload_router.router)
+app.include_router(quiz_router.router)
 
 # 500 에러 처리
 @app.exception_handler(Exception)

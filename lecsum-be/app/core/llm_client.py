@@ -16,3 +16,4 @@ def build_llm_chain(llm, prompt, output) -> Runnable:
     return chain
 
 quiz_chain = build_llm_chain(chatOpenAI, get_quiz_prompt(), QuizResponse)
+grade_chain = build_llm_chain(chatOpenAI, get_grading_prompt(), GradeResultList)

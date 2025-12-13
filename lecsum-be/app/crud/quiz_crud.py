@@ -30,3 +30,40 @@ def create_quiz_list(db: Session, quiz_set_id: int, quizzes: list[QuizItem]):
     db.commit()
     
     return db_quizzes
+
+def get_quizzes_by_ids(db: Session, quiz_ids: List[int]) -> List[quiz.Quiz]:
+    return db.query(quiz.Quiz).filter(quiz.Quiz.id.in_(quiz_ids)).all()
+
+# 응시 기록(Attempt) 생성
+def create_attempt(db: Session, quiz_set_id: int) -> quiz.Attempt:
+    
+    attempt = quiz.Attempt(
+        quiz_set_id=quiz_set_id,
+        score=0,
+        quiz_count=0,
+        correct_count=0
+    )
+    db.add(attempt)
+    db.flush()  # ID 생성을 위해 flush
+    return attempt
+
+# 채점 결과(QuizResult) 저장
+def create_quiz_results(db: Session, attempt_id: int, grade_data: List[dict]):
+   
+    results = [
+        quiz.QuizResult(
+            attempt_id=attempt_id,
+            quiz_id=item['quiz_id'],
+            user_answer=item['user_answer'],
+            is_correct=item['is_correct']
+        ) for item in grade_data
+    ]
+    db.add_all(results)
+
+# 최종 점수 업데이트
+def update_attempt_score(db: Session, attempt_id: int, total_count: int, correct_count: int, score: int):
+    attempt = db.query(quiz.Attempt).filter(quiz.Attempt.id == attempt_id).first()
+    if attempt:
+        attempt.quiz_count = total_count
+        attempt.correct_count = correct_count
+        attempt.score = score

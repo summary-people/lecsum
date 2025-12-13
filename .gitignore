@@ -29,6 +29,9 @@ ENV/
 .idea/
 *.iml
 
+# VectorDB
+./ChromaDB.PERSIST_DIRECTORY
+
 # ================================
 # FastAPI / Backend
 # ================================

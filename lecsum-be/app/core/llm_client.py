@@ -1,8 +1,8 @@
 # GPT-4o-mini 호출 래퍼
 from langchain_openai import ChatOpenAI
 from langchain_core.runnables import Runnable
-from core.prompt_templates.quiz_prompt import *
-from db.quiz_schemas import *
+from app.core.prompt_templates.quiz_prompt import *
+from app.db.quiz_schemas import *
 
 chatOpenAI = ChatOpenAI(
     temperature=0,

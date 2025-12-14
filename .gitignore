@@ -29,6 +29,8 @@ ENV/
 .idea/
 *.iml
 
+
+
 # ================================
 # FastAPI / Backend
 # ================================
@@ -50,6 +52,7 @@ vectorstore/
 chromadb/
 chroma/
 *.chroma/
+ChromaDB.PERSIST_DIRECTORY
 
 # ================================
 # Streamlit / Frontend

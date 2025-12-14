@@ -3,9 +3,9 @@ from fastapi import UploadFile, File, APIRouter, Depends
 
 from dotenv import load_dotenv
 load_dotenv()
-from db.schemas import CommonResponse
-from db.database import get_db
-from services import file_service
+from app.db.schemas import CommonResponse
+from app.db.database import get_db
+from app.services import file_service
 from sqlalchemy.orm import Session
 
 router = APIRouter(

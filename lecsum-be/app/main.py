@@ -2,8 +2,8 @@
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
-from db.database import engine, Base
-from routers import upload_router, quiz_router
+from app.db.database import engine, Base
+from app.routers import upload_router, quiz_router
 
 import os
 from dotenv import load_dotenv

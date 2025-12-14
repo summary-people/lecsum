@@ -12,8 +12,8 @@ from langchain_chroma import Chroma
 from langchain_openai import OpenAIEmbeddings
 
 # 내부 모듈 임포트
-from crud import file_crud
-from core.enums import ChromaDB 
+from app.crud import file_crud
+from app.core.enums import ChromaDB 
 
 async def register_pdf(db: Session, file: UploadFile):
     # 1. UUID 생성

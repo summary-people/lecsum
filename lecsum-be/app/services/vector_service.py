@@ -3,7 +3,7 @@ from langchain_chroma import Chroma
 from langchain_openai import OpenAIEmbeddings
 from typing import List
 
-from core.enums import ChromaDB
+from app.core.enums import ChromaDB
 
 
 chroma = Chroma(

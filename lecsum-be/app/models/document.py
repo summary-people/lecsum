@@ -2,7 +2,7 @@
 from sqlalchemy import Column, Integer, String, DateTime
 from sqlalchemy.orm import relationship
 from datetime import datetime
-from db.database import Base
+from app.db.database import Base
 
 
 # PDF 파일 정보

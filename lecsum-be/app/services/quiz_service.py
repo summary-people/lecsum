@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from crud import quiz_crud, file_crud
 from db.quiz_schemas import *
 from services import vector_service
-from core.llm_client import quiz_chain, grade_chain
+from core.llm_client import final_reflection_chain , grade_chain
 
 async def generate_and_save_quiz(db: Session, request: QuizRequest) -> QuizResponse:
     # 1. [MySQL] pdf_id로 PDF 정보(UUID) 조회
@@ -26,7 +26,7 @@ async def generate_and_save_quiz(db: Session, request: QuizRequest) -> QuizRespo
 
     # 3. [LLM] 퀴즈 생성 (Invoke)
     # result는 QuizResponse Pydantic 객체 (quizzes=[QuizItem, ...])
-    result = quiz_chain.invoke({"context": context_text})
+    result = final_reflection_chain.invoke({"context": context_text})
 
     for quiz in result.quizzes:
         if quiz.type == "true_false":

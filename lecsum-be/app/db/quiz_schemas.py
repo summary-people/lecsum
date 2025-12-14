@@ -15,6 +15,10 @@ class QuizItem(BaseModel):
     correct_answer: str = Field(description="정답")
     explanation: str = Field(description="해설")
 
+# [New] LLM 생성 전용 출력 (quiz_set_id 제거 버전)
+class QuizGenerationOutput(BaseModel):
+    quizzes: List[QuizItem] = Field(description="생성된 퀴즈 리스트")
+
 # 퀴즈 세트 구조
 class QuizResponse(BaseModel):
     quiz_set_id: int

@@ -80,6 +80,328 @@ def get_quiz_prompt() -> ChatPromptTemplate:
         ("human", "강의 내용: {context}"),
     ])
 
+# 비평
+def get_critic_prompt() -> ChatPromptTemplate:
+    # ------------------------------------------------------------------
+    # Few-shot 1: [혼합 케이스] 
+    # 상황: 5문제 중 2개 정상, 3개 오류(사실오류, 환각)
+    # 유형: 객관식, OX, 단답형 혼합
+    # ------------------------------------------------------------------
+    example_mixed_context = """
+    [파이썬 자료구조]
+    1. 리스트(List): 대괄호 []를 사용하며, 요소를 수정할 수 있는 가변(Mutable) 객체다.
+    2. 튜플(Tuple): 소괄호 ()를 사용하며, 한 번 생성하면 수정할 수 없는 불변(Immutable) 객체다.
+    3. 딕셔너리(Dict): 중괄호 {{}}를 사용하여 Key-Value 쌍으로 저장한다. Key는 중복될 수 없다.
+    """
+    
+    # JSON 포맷에 type과 options 추가
+    example_mixed_quiz = """
+    {{
+      "quizzes": [
+        {{
+          "id": 0,
+          "type": "multiple_choice",
+          "question": "파이썬에서 리스트를 생성할 때 사용하는 기호는?",
+          "options": ["중괄호 {{}}", "소괄호 ()", "대괄호 []", "꺽쇠 <>"],
+          "correct_answer": "대괄호 []",
+          "explanation": "리스트는 대괄호 []로 선언합니다."
+        }},
+        {{
+          "id": 1,
+          "type": "multiple_choice",
+          "question": "다음 중 튜플(Tuple)의 특징으로 올바른 것은?",
+          "options": ["내부 요소를 자유롭게 수정할 수 있다.", "소괄호를 사용한다.", "Key-Value 쌍이다.", "가변 객체이다."],
+          "correct_answer": "내부 요소를 자유롭게 수정할 수 있다.",
+          "explanation": "튜플은 가변 객체이므로 값 변경이 가능합니다."
+        }},
+        {{
+          "id": 2,
+          "type": "short_answer",
+          "question": "딕셔너리(Dictionary)는 어떤 형태의 쌍으로 데이터를 저장하는가?",
+          "options": [],
+          "correct_answer": "Key와 Value",
+          "explanation": "딕셔너리는 키와 값의 쌍으로 데이터를 저장합니다."
+        }},
+        {{
+          "id": 3,
+          "type": "true_false",
+          "question": "C++의 Vector는 파이썬의 리스트보다 메모리 사용량이 적다.",
+          "options": ["O", "X"],
+          "correct_answer": "O",
+          "explanation": "C++은 메모리 효율이 좋습니다."
+        }},
+        {{
+          "id": 4,
+          "type": "true_false",
+          "question": "딕셔너리의 Key는 중복해서 설정할 수 있다.",
+          "options": ["O", "X"],
+          "correct_answer": "O",
+          "explanation": "Key는 중복이 허용됩니다."
+        }}
+      ]
+    }}
+    """
+
+    # 비평 내용은 그대로 유지 (오류가 있는 1, 3, 4번만 지적)
+    example_mixed_critique = """
+    - **Index 1 수정 제안**: 사실 관계 오류. 튜플은 '불변(Immutable)' 객체이므로 수정할 수 없다. 정답을 '소괄호를 사용한다'로 변경하고 해설을 바로잡아라.
+    - **Index 3 수정 제안**: Hallucination(환각). [학습 자료]에는 'C++ Vector'에 대한 내용이 전혀 없다. 해당 문제는 삭제하거나 파이썬 딕셔너리 관련 문제로 교체하라.
+    - **Index 4 수정 제안**: 사실 관계 오류. 딕셔너리의 Key는 '중복될 수 없다'. 정답을 'X'로 수정하고 해설을 'Key는 고유해야 하므로 중복될 수 없습니다'로 고쳐라.
+    """
+
+    # ------------------------------------------------------------------
+    # Few-shot 2: [완벽한 케이스]
+    # 상황: 5문제 모두 정상
+    # ------------------------------------------------------------------
+    example_good_context = """
+    [광합성]
+    식물은 빛 에너지를 이용하여 이산화탄소와 물을 포도당과 산소로 변환한다. 
+    이 과정을 광합성이라고 한다. 광합성은 주로 잎의 엽록체에서 일어난다.
+    """
+    
+    example_good_quiz = """
+    {{
+      "quizzes": [
+        {{ 
+            "id": 0, 
+            "type": "short_answer", 
+            "question": "식물이 양분을 만드는 과정을 무엇이라 하는가?", 
+            "options": [], 
+            "correct_answer": "광합성", 
+            "explanation": "..." 
+        }},
+        {{ 
+            "id": 1, 
+            "type": "multiple_choice", 
+            "question": "광합성에 필요한 재료가 아닌 것은?", 
+            "options": ["이산화탄소", "물", "빛 에너지", "소금"], 
+            "correct_answer": "소금", 
+            "explanation": "..." 
+        }},
+        {{ 
+            "id": 2, 
+            "type": "fill_in_blank", 
+            "question": "광합성 결과 생성되는 물질은 포도당과 _____ 이다.", 
+            "options": [], 
+            "correct_answer": "산소", 
+            "explanation": "..." 
+        }},
+        {{ 
+            "id": 3, 
+            "type": "multiple_choice", 
+            "question": "광합성이 주로 일어나는 장소는?", 
+            "options": ["뿌리", "줄기", "엽록체", "꽃"], 
+            "correct_answer": "엽록체", 
+            "explanation": "..." 
+        }},
+        {{ 
+            "id": 4, 
+            "type": "true_false", 
+            "question": "광합성은 밤에만 일어난다.", 
+            "options": ["O", "X"], 
+            "correct_answer": "X", 
+            "explanation": "..." 
+        }}
+      ]
+    }}
+    """
+    
+    example_good_critique = "수정 사항 없음"
+
+    return ChatPromptTemplate.from_messages([
+        ("system", """
+        당신은 꼼꼼하고 논리적인 '교육 콘텐츠 품질 관리자(QA Specialist)'다.
+        강사가 생성한 [퀴즈 초안]을 [학습 자료]와 대조하여 정밀 검수를 수행하라.
+
+        다음의 **평가 체크리스트**를 기준으로 엄격하게 분석하라:
+
+        1. **Fact Check (사실 검증)**: 
+           - 모든 문제와 정답은 오직 [학습 자료]에 근거해야 한다. 
+           - 자료에 없는 내용(Hallucination)이나, 자료와 상충되는 정답이 있다면 지적하라.
+        
+        2. **Logical & Unambiguous (논리적 명확성)**:
+           - 정답은 하나여야 하며, 오답(Distractor)이 정답으로 해석될 여지가 없어야 한다.
+           - 해설(Explanation)이 정답의 근거를 논리적으로 설명하고 있는지 확인하라.
+
+        3. **Quality & Redundancy (품질 및 중복)**:
+           - 단순한 말장난 문제는 지양하라.
+           - 앞의 문제와 내용이 겹치거나 똑같은 문제는 없는가?
+           - 빈칸 채우기나 단답형의 정답이 너무 길거나 모호하지 않은가?
+
+        [출력 형식 가이드]
+        - 수정이 필요한 문제가 있다면, 해당 문제의 **번호(Index)**와 **수정 제안(구체적인 이유와 대안)**을 글머리 기호로 명시하라.
+        - 만약 모든 문제가 완벽하다면, 오직 **"수정 사항 없음"**이라고만 출력하라.
+        """),
+
+        # Few-shot
+        ("human", f"[학습 자료]\n{example_mixed_context}\n\n[퀴즈 초안]\n{example_mixed_quiz}"),
+        ("ai", example_mixed_critique),
+        
+        ("human", f"[학습 자료]\n{example_good_context}\n\n[퀴즈 초안]\n{example_good_quiz}"),
+        ("ai", example_good_critique),
+        # 실제 입력
+        ("human", """
+        [학습 자료]
+        {context}
+        
+        [퀴즈 초안]
+        {initial_quiz}
+        """)
+    ])
+
+def get_refiner_prompt() -> ChatPromptTemplate:
+    # 1. 학습 자료 (Context)
+    example_context = """
+    [파이썬 자료구조 핵심]
+    1. 리스트(List): 대괄호 [] 사용. 순서가 있고 수정 가능(Mutable)하다.
+    2. 튜플(Tuple): 소괄호 () 사용. 순서가 있지만 수정 불가능(Immutable)하다.
+    3. 세트(Set): 중괄호 {{}} 사용. 순서가 없고 중복을 허용하지 않는다.
+    4. 딕셔너리(Dict): Key-Value 쌍 구조. Key는 고유해야 한다.
+    """
+
+    # 2. 퀴즈 초안 (Initial Quiz) - 5문제 (오류 포함)
+    example_initial_quiz = """
+    {{
+      "quizzes": [
+        {{
+          "id": 0,
+          "type": "multiple_choice",
+          "question": "파이썬 리스트의 선언 기호는?",
+          "options": ["[]", "()", "{{}}"],
+          "correct_answer": "[]",
+          "explanation": "리스트는 대괄호를 사용합니다."
+        }},
+        {{
+          "id": 1,
+          "type": "true_false",
+          "question": "튜플은 생성 후 내부 요소를 자유롭게 수정할 수 있다.",
+          "options": ["O", "X"],
+          "correct_answer": "O", 
+          "explanation": "튜플은 가변 객체이므로 수정 가능합니다."
+        }},
+        {{
+          "id": 2,
+          "type": "short_answer",
+          "question": "Key와 Value의 쌍으로 이루어진 자료구조는?",
+          "options": [],
+          "correct_answer": "딕셔너리",
+          "explanation": "딕셔너리는 키-값 쌍으로 저장됩니다."
+        }},
+        {{
+          "id": 3,
+          "type": "true_false",
+          "question": "세트(Set)는 데이터의 중복 저장을 허용한다.",
+          "options": ["O", "X"],
+          "correct_answer": "O",
+          "explanation": "세트는 중복을 허용하는 자료구조입니다."
+        }},
+        {{
+          "id": 4,
+          "type": "multiple_choice",
+          "question": "자바(Java)의 배열 선언 방식과 가장 유사한 것은?",
+          "options": ["List", "Set", "Dict"],
+          "correct_answer": "List",
+          "explanation": "자바 배열과 리스트는 유사합니다."
+        }}
+      ]
+    }}
+    """
+
+    # 3. 비평 (Critique) - 1, 3, 4번 지적
+    example_critique = """
+    - **Index 1 수정 제안**: 사실 관계 오류. 튜플은 '불변(Immutable)'이므로 수정할 수 없다. 정답을 'X'로 바꾸고 해설을 '튜플은 불변 객체입니다'로 수정하라.
+    - **Index 3 수정 제안**: 사실 관계 오류. 세트(Set)는 '중복을 허용하지 않는다'. 정답을 'X'로 바꾸고 해설을 바로잡아라.
+    - **Index 4 수정 제안**: Hallucination(환각). [학습 자료]에 '자바' 내용은 없다. 이 문제를 삭제하고 '세트의 괄호 기호'를 묻는 문제로 교체하라.
+    """
+
+    # 4. 최종 결과 (Final Quiz)
+    example_final_quiz = """
+    {{
+      "quizzes": [
+        {{
+          "id": 0, "type": "multiple_choice",
+          "question": "파이썬 리스트의 선언 기호는?",
+          "options": ["[]", "()", "{{}}"],
+          "correct_answer": "[]",
+          "explanation": "리스트는 대괄호를 사용합니다."
+        }},
+        {{
+          "id": 1, "type": "true_false",
+          "question": "튜플은 생성 후 내부 요소를 자유롭게 수정할 수 있다.",
+          "options": ["O", "X"],
+          "correct_answer": "X",
+          "explanation": "튜플은 불변(Immutable) 객체이므로 생성 후 수정할 수 없습니다."
+        }},
+        {{
+          "id": 2, "type": "short_answer",
+          "question": "Key와 Value의 쌍으로 이루어진 자료구조는?",
+          "options": [],
+          "correct_answer": "딕셔너리",
+          "explanation": "딕셔너리는 키-값 쌍으로 저장됩니다."
+        }},
+        {{
+          "id": 3, "type": "true_false",
+          "question": "세트(Set)는 데이터의 중복 저장을 허용한다.",
+          "options": ["O", "X"],
+          "correct_answer": "X",
+          "explanation": "세트(Set)는 중복된 값을 허용하지 않는 자료구조입니다."
+        }},
+        {{
+          "id": 4, "type": "multiple_choice",
+          "question": "파이썬에서 세트(Set)를 선언할 때 사용하는 기호는?",
+          "options": ["()", "[]", "{{}}"],
+          "correct_answer": "{{}}",
+          "explanation": "세트는 중괄호 {{}}를 사용하여 선언합니다."
+        }}
+      ]
+    }}
+    """
+
+    return ChatPromptTemplate.from_messages([
+        ("system", """
+        당신은 꼼꼼한 '최종 퀴즈 편집자(Final Editor)'다.
+        [비평] 내용을 바탕으로 [퀴즈 초안]을 수정하여 완성도 높은 퀴즈 세트를 확정하라.
+        
+        [필수 지시사항]
+        1. **지적된 문제 수정**: [비평]에서 구체적으로 지적한 문제(Index)를 찾아 올바르게 수정하라.
+        2. **해설 동기화**: 정답을 변경할 경우, 반드시 **해설(Explanation)**도 변경된 정답에 맞게 논리적으로 다시 작성하라.
+        3. **보존 원칙**: 비평에서 언급되지 않은(문제가 없는) 퀴즈는 절대 내용을 변경하지 말고 그대로 유지하라.
+        """),
+
+        # --- Few-shot Example ---
+        ("human", f"""
+        [학습 자료]
+        {example_context}
+        
+        [퀴즈 초안]
+        {example_initial_quiz}
+        
+        [비평]
+        {example_critique}
+        """),        
+        ("ai", example_final_quiz),        
+
+
+        ("human", """
+        [학습 자료]
+        {context}
+        
+        [퀴즈 초안]
+        {initial_quiz}
+        
+        [비평]
+        {critique}
+        """)
+    ])
+
+
+
+
+
+
+
+# 채점 프롬프트
+
 def get_grading_prompt() -> ChatPromptTemplate:
     example_input = """
     다음 5개의 퀴즈 답안을 채점해줘.

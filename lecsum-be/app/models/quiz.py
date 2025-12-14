@@ -3,7 +3,7 @@ from sqlalchemy import Column, Integer, String, Text, ForeignKey, DateTime, Bool
 from sqlalchemy.dialects.mysql import JSON
 from sqlalchemy.orm import relationship
 from datetime import datetime
-from db.database import Base
+from app.db.database import Base
 
 
 # 퀴즈 세트 (시험지)

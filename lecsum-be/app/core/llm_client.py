@@ -2,8 +2,8 @@
 from langchain_openai import ChatOpenAI
 from langchain_core.runnables import Runnable, RunnablePassthrough, RunnableLambda
 from langchain_core.output_parsers import StrOutputParser
-from core.prompt_templates.quiz_prompt import *
-from db.quiz_schemas import *
+from app.core.prompt_templates.quiz_prompt import *
+from app.db.quiz_schemas import *
 
 chatOpenAI = ChatOpenAI(
     temperature=0,

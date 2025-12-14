@@ -3,10 +3,10 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 
-from db.quiz_schemas import *
-from db.schemas import CommonResponse
-from db.database import get_db
-from services import quiz_service
+from app.db.quiz_schemas import *
+from app.db.schemas import CommonResponse
+from app.db.database import get_db
+from app.services import quiz_service
 
 router = APIRouter(
     prefix="/api/quizs",

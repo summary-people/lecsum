@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
-from models import quiz
-from db.quiz_schemas import *
+from app.models import quiz
+from app.db.quiz_schemas import *
 
 # 퀴즈 세트(시험지) 생성
 def create_quiz_set(db: Session, pdf_id: int):

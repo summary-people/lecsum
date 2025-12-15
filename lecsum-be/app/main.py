@@ -18,6 +18,8 @@ openai.api_key = os.getenv("OPENAI_API_KEY")
 app.include_router(upload_router.router)
 app.include_router(quiz_router.router)
 
+Base.metadata.create_all(bind=engine)
+
 # 전역 예외 처리
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request, exc):

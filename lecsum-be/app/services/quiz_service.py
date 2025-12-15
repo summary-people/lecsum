@@ -7,6 +7,7 @@ from app.db.quiz_schemas import *
 from app.services import vector_service
 from app.core.llm_client import final_reflection_chain , grade_chain
 
+
 async def generate_and_save_quiz(db: Session, request: QuizRequest) -> QuizResponse:
     # 1. [MySQL] pdf_id로 PDF 정보(UUID) 조회
     pdf = file_crud.get_pdf_by_id(db, request.pdf_id)

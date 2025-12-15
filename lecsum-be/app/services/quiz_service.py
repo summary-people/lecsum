@@ -166,31 +166,35 @@ async def create_retry_quiz(db: Session, request: RetryQuizRequest) -> RetryQuiz
     """
     틀린 문제 기반 재시험 생성
     각 틀린 문제당 유사한 문제 3개씩 생성
+    각 문제는 원본 PDF에 개별적으로 연결됨
     """
-    # 1. 틀린 문제들 조회
+    # 틀린 문제들 조회
     quizzes = quiz_crud.get_quizzes_by_ids(db, request.quiz_ids)
 
     if not quizzes:
         raise HTTPException(status_code=404, detail="문제를 찾을 수 없습니다.")
 
-    # 2. PDF ID 확인 (모든 문제가 같은 PDF에서 나왔는지)
-    # 첫 번째 문제의 PDF ID 가져오기
-    first_quiz_set = db.query(quiz_crud.quiz.QuizSet).filter(
-        quiz_crud.quiz.QuizSet.id == quizzes[0].quiz_set_id
-    ).first()
+    # 전체 생성된 문제 및 QuizSet ID 리스트
+    all_saved_quizzes = []
+    quiz_set_ids = []
 
-    if not first_quiz_set:
-        raise HTTPException(status_code=404, detail="문제 세트를 찾을 수 없습니다.")
-
-    pdf_id = first_quiz_set.pdf_id
-
-    # 3. 새로운 퀴즈 세트 생성
-    new_quiz_set = quiz_crud.create_quiz_set(db, pdf_id)
-
-    # 4. 각 틀린 문제마다 유사 문제 3개 생성
-    all_new_quizzes = []
-
+    # 각 틀린 문제마다 처리
     for original_quiz in quizzes:
+        # 각 문제의 원본 PDF ID 조회
+        quiz_set = db.query(quiz_crud.quiz.QuizSet).filter(
+            quiz_crud.quiz.QuizSet.id == original_quiz.quiz_set_id
+        ).first()
+
+        if not quiz_set:
+            raise HTTPException(
+                status_code=404,
+                detail=f"문제 세트를 찾을 수 없습니다. (quiz_id={original_quiz.id})"
+            )
+
+        # 해당 PDF에 대한 새 QuizSet 생성
+        new_quiz_set = quiz_crud.create_quiz_set(db, quiz_set.pdf_id)
+        quiz_set_ids.append(new_quiz_set.id)
+
         # 원본 문제 정보를 문자열로 포맷팅
         original_quiz_info = f"""
 문제 유형: {original_quiz.type}
@@ -212,14 +216,13 @@ async def create_retry_quiz(db: Session, request: RetryQuizRequest) -> RetryQuiz
                 detail=f"문제 생성 오류: {len(retry_result.quizzes)}개 생성됨 (예상: 3개)"
             )
 
-        all_new_quizzes.extend(retry_result.quizzes)
+        # 생성된 문제들을 해당 QuizSet에 저장
+        saved_quizzes = quiz_crud.create_quiz_list(db, new_quiz_set.id, retry_result.quizzes)
+        all_saved_quizzes.extend(saved_quizzes)
 
-    # 5. 생성된 모든 문제를 DB에 저장
-    saved_quizzes = quiz_crud.create_quiz_list(db, new_quiz_set.id, all_new_quizzes)
-
-    # 6. 응답 구성
+    # 응답 구성
     response_items = []
-    for q in saved_quizzes:
+    for q in all_saved_quizzes:
         response_items.append(QuizItem(
             id=q.id,
             question=q.question,
@@ -230,7 +233,7 @@ async def create_retry_quiz(db: Session, request: RetryQuizRequest) -> RetryQuiz
         ))
 
     return RetryQuizResponse(
-        quiz_set_id=new_quiz_set.id,
+        quiz_set_ids=quiz_set_ids,  # 여러 QuizSet ID 반환
         total_questions=len(response_items),
         quizzes=response_items
     )

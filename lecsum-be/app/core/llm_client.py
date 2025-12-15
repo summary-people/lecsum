@@ -45,5 +45,5 @@ grade_chain: Runnable = build_structured_chain(
 retry_quiz_chain: Runnable = build_structured_chain(
     chatOpenAI,
     get_retry_quiz_prompt(),
-    QuizResponse,
+    QuizResponse, # 퀴즈 생성과 동일한 방식으로 재시험 생성
 )

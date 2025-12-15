@@ -58,6 +58,6 @@ class RetryQuizRequest(BaseModel):
 
 # [Response] 오답 재시험 생성 응답
 class RetryQuizResponse(BaseModel):
-    quiz_set_id: int
+    quiz_set_ids: List[int] = Field(description="생성된 퀴즈 세트 ID 리스트 (각 문제가 원본 PDF에 연결)")
     total_questions: int
     quizzes: List[QuizItem]

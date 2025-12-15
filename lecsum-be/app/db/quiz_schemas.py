@@ -51,3 +51,13 @@ class WrongAnswerItem(BaseModel):
     explanation: str
     user_answer: str          # 내가 틀린 답
     attempt_id: int           # 어느 시험에서 틀렸는지
+
+# [Request] 오답 재시험 생성 요청
+class RetryQuizRequest(BaseModel):
+    quiz_ids: List[int] = Field(description="틀린 문제 ID 리스트")
+
+# [Response] 오답 재시험 생성 응답
+class RetryQuizResponse(BaseModel):
+    quiz_set_id: int
+    total_questions: int
+    quizzes: List[QuizItem]

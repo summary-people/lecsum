@@ -9,6 +9,8 @@ from app.db.quiz_schemas import (
     GradeRequest,
     GradeResponse,
     WrongAnswerItem,
+    RetryQuizRequest,
+    RetryQuizResponse,
 )
 from app.db.schemas import CommonResponse
 from app.db.database import get_db
@@ -196,3 +198,35 @@ async def get_wrong_answers(
     """
     result = quiz_service.get_wrong_answer_list(db, limit, offset)
     return CommonResponse(data=result)
+
+@router.post(
+    "/wrong-answers/retry",
+    response_model=CommonResponse[RetryQuizResponse],
+    summary="오답 재시험 생성",
+    description="""
+틀린 문제를 기반으로 유사한 문제들로 구성된 재시험을 생성합니다.
+
+### 처리 절차
+1. 틀린 문제 ID 리스트 입력
+2. 각 문제의 핵심 개념 분석
+3. LLM을 이용해 각 문제당 유사한 문제 3개 생성
+4. 생성된 문제들을 새로운 퀴즈 세트로 저장
+5. 재시험 반환
+
+### 예시
+- 틀린 문제 3개 선택 → 총 9개(3×3) 문제로 구성된 재시험 생성
+- 틀린 문제 5개 선택 → 총 15개(5×3) 문제로 구성된 재시험 생성
+"""
+)
+async def create_retry_quiz(
+    request: RetryQuizRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    틀린 문제 기반 재시험 생성
+    """
+    result = await quiz_service.create_retry_quiz(db, request)
+    return CommonResponse(
+        message="재시험이 생성되었습니다.",
+        data=result
+    )

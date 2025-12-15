@@ -40,3 +40,14 @@ class GradeResponse(BaseModel):
     attempt_id: int
     score: int
     results: List[SingleGradeResult]
+
+# [Response] 오답 노트 응답
+class WrongAnswerItem(BaseModel):
+    quiz_id: int
+    question: str
+    type: str
+    options: List[str]
+    correct_answer: str
+    explanation: str
+    user_answer: str          # 내가 틀린 답
+    attempt_id: int           # 어느 시험에서 틀렸는지

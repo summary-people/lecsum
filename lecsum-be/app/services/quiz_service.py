@@ -131,3 +131,26 @@ async def grade_quiz_set(db: Session, request: GradeRequest) -> GradeResponse:
     except Exception as e:
         db.rollback()
         raise e
+    
+def get_wrong_answer_list(db: Session, limit: int, offset: int):
+    """
+    오답 노트 목록 반환
+    """
+    results = quiz_crud.get_wrong_answers(db, limit, offset)
+    
+    items = []
+    for result, quiz_obj in results:
+        
+        items.append(WrongAnswerItem(
+            quiz_id=quiz_obj.id,
+            question=quiz_obj.question,
+            type=quiz_obj.type,
+            options=quiz_obj.options or [],
+            correct_answer=quiz_obj.correct_answer,
+            explanation=quiz_obj.explanation,
+            user_answer=result.user_answer,
+            attempt_id=result.attempt_id,
+            created_at=result.created_at
+        ))
+    
+    return items

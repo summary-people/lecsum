@@ -1,4 +1,5 @@
 # 모의시험 생성 및 채점 API
+from typing import List
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
@@ -7,6 +8,7 @@ from app.db.quiz_schemas import (
     QuizResponse,
     GradeRequest,
     GradeResponse,
+    WrongAnswerItem,
 )
 from app.db.schemas import CommonResponse
 from app.db.database import get_db
@@ -177,3 +179,20 @@ async def grade_batch_quiz(
         message="채점이 완료되었습니다.",
         data=result,
     )
+
+@router.get(
+    "/wrong-answers",
+    response_model=CommonResponse[List[WrongAnswerItem]],
+    summary="오답노트 조회",
+    description="사용자가 틀린 문제들을 모아서 반환합니다."
+)
+async def get_wrong_answers(
+    limit: int = 10,
+    offset: int = 0,
+    db: Session = Depends(get_db)
+):
+    """
+    오답만 필터링해서 반환
+    """
+    result = quiz_service.get_wrong_answer_list(db, limit, offset)
+    return CommonResponse(data=result)

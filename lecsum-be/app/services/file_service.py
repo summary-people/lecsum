@@ -157,7 +157,7 @@ def get_document_detail(db: Session, uuid: str):
 
     return DocumentSummaryDetail(
         uuid=document.uuid,
-        title=document.name,
+        name=document.name,
         summary=document.summary,
         keywords=document.keywords.split(", ") if document.keywords else [],
         created_at=document.created_at,

@@ -137,10 +137,17 @@ def get_wrong_answer_list(db: Session, limit: int, offset: int):
     오답 노트 목록 반환
     """
     results = quiz_crud.get_wrong_answers(db, limit, offset)
-    
+
+    # 틀린 문제가 없는 경우 예외 처리
+    if not results:
+        raise HTTPException(
+            status_code=404,
+            detail="틀린 문제가 없습니다. 모든 문제를 정답으로 맞추셨습니다!"
+        )
+
     items = []
     for result, quiz_obj in results:
-        
+
         items.append(WrongAnswerItem(
             quiz_id=quiz_obj.id,
             question=quiz_obj.question,
@@ -152,5 +159,5 @@ def get_wrong_answer_list(db: Session, limit: int, offset: int):
             attempt_id=result.attempt_id,
             created_at=result.created_at
         ))
-    
+
     return items

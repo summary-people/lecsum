@@ -2,8 +2,8 @@
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
-from db.database import engine, Base
-from routers import upload_router, quiz_router
+from app.db.database import engine, Base
+from app.routers import upload_router, quiz_router
 
 import os
 from dotenv import load_dotenv
@@ -17,6 +17,8 @@ openai.api_key = os.getenv("OPENAI_API_KEY")
 
 app.include_router(upload_router.router)
 app.include_router(quiz_router.router)
+
+Base.metadata.create_all(bind=engine)
 
 # 전역 예외 처리
 @app.exception_handler(HTTPException)

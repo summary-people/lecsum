@@ -3,7 +3,7 @@ from sqlalchemy import Column, Integer, String, Text, ForeignKey, DateTime, Bool
 from sqlalchemy.dialects.mysql import JSON
 from sqlalchemy.orm import relationship
 from datetime import datetime
-from db.database import Base
+from app.db.database import Base
 
 
 # 퀴즈 세트 (시험지)
@@ -11,7 +11,7 @@ class QuizSet(Base):
     __tablename__ = "quiz_set"
 
     id = Column(Integer, primary_key=True, index=True)
-    pdf_id = Column(Integer, ForeignKey("pdf.id"), nullable=False)
+    pdf_id = Column(Integer, ForeignKey("pdf_files.id"), nullable=False)
     created_at = Column(DateTime, default=datetime.now)
 
     # N:1

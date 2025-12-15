@@ -49,12 +49,6 @@ refiner_chain: Runnable = build_structured_chain(
     QuizGenerationOutput
 )
 
-grade_chain: Runnable = build_structured_chain(
-    chatOpenAI,
-    get_grading_prompt(),
-    GradeResultList,
-)
-
 def route_quiz_generation(info):
     critique = info["critique"]
     
@@ -92,3 +86,14 @@ def build_reflection_chain():
     )
 
 final_reflection_chain = build_reflection_chain()
+
+grade_chain: Runnable = build_structured_chain(
+    chatOpenAI,
+    get_grading_prompt(),
+    GradeResultList,
+)
+
+enrich_chain: Runnable = build_llm_chain(
+    ChatOpenAI(model="gpt-4o-mini", temperature=0.7),
+    get_enrichment_prompt()
+)

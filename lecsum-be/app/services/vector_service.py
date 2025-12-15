@@ -17,7 +17,7 @@ def get_vectorstore() -> Chroma:
     )
 
 
-def get_retriever(document_id: str):
+def get_retriever(document_uuid: str):
     """
     특정 PDF(document_id)에 대한 retriever 생성
     """
@@ -26,7 +26,7 @@ def get_retriever(document_id: str):
         search_type="similarity",
         search_kwargs={
             "k": 3,
-            "filter": {"document_id": document_id}
+            "filter": {"document_uuid": document_uuid}
         },
     )
 

@@ -279,8 +279,8 @@ async def create_retry_quiz(db: Session, request: RetryQuizRequest) -> RetryQuiz
     # 각 틀린 문제마다 처리
     for original_quiz in quizzes:
         # 각 문제의 원본 PDF ID 조회
-        quiz_set = db.query(quiz_crud.quiz.QuizSet).filter(
-            quiz_crud.quiz.QuizSet.id == original_quiz.quiz_set_id
+        quiz_set = db.query(quiz_crud.QuizSet).filter(
+            quiz_crud.QuizSet.id == original_quiz.quiz_set_id
         ).first()
 
         if not quiz_set:

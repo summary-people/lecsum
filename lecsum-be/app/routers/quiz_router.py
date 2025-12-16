@@ -193,17 +193,17 @@ async def grade_quiz(
     response_model=CommonResponse[List[QuizSetDto]],
     summary="파일별 퀴즈 세트 목록 조회",
     description="""
-    특정 파일(pdf_id)에 연관된 모든 퀴즈 세트(문제지) 목록을 조회합니다.
+특정 파일(pdf_id)에 연관된 모든 퀴즈 세트(문제지) 목록을 조회합니다.
 
-    ### 처리 내용
-    1. 요청받은 `pdf_id`로 생성된 퀴즈 세트를 DB에서 조회
-    2. 각 퀴즈 세트에 포함된 문제(Quiz) 정보도 함께 로딩
-    3. 생성일자 기준 내림차순 정렬하여 반환
+### 처리 내용
+1. 요청받은 pdf_id로 생성된 퀴즈 세트를 DB에서 조회
+2. 각 퀴즈 세트에 포함된 문제(Quiz) 정보도 함께 로딩
+3. 생성일자 기준 내림차순 정렬하여 반환
 
-    ### 반환 데이터
-    - 퀴즈 세트 ID
-    - 생성 일자
-    - 포함된 문제 개수 및 미리보기
+### 반환 데이터
+- 퀴즈 세트 ID
+- 생성 일자
+- 포함된 문제 개수 및 미리보기
     """,
     responses={
         200: {
@@ -277,11 +277,11 @@ async def get_quiz_list(pdf_id: int, db: Session = Depends(get_db)):
     response_model=CommonResponse[None],
     summary="퀴즈 세트(문제지) 삭제",
     description="""
-    특정 퀴즈 세트를 삭제합니다. 
-    `Cascade` 설정에 따라 연관된 **개별 문제(Quiz)**와 **풀이 기록(Attempt)**도 함께 삭제됩니다.
+특정 퀴즈 세트를 삭제합니다. 
+**개별 문제(Quiz)**와 **풀이 기록(Attempt)**도 함께 삭제됩니다.
 
-    ### 주의사항
-    - 삭제된 데이터는 복구할 수 없습니다.
+### 주의사항
+- 삭제된 데이터는 복구할 수 없습니다.
     """,
     responses={
         200: {

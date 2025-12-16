@@ -31,7 +31,7 @@ def get_retriever(document_id: str):
         search_type="similarity",
         search_kwargs={
             "k": 3,
-            "filter": {"document_id": document_id}
+            "filter": {"document_uuid": document_id}
         },
     )
 

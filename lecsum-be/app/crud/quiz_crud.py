@@ -67,3 +67,18 @@ def update_attempt_score(db: Session, attempt_id: int, total_count: int, correct
         attempt.quiz_count = total_count
         attempt.correct_count = correct_count
         attempt.score = score
+
+# 틀린 문제 조회
+def get_wrong_answers(db: Session, limit: int, offset: int):
+    """
+    is_correct = False인 QuizResult 조회 + Quiz 정보 조인
+    """
+    return (
+        db.query(quiz.QuizResult, quiz.Quiz)
+        .join(quiz.Quiz, quiz.QuizResult.quiz_id == quiz.Quiz.id)
+        .filter(quiz.QuizResult.is_correct == False)
+        .order_by(quiz.QuizResult.created_at.desc())
+        .limit(limit)
+        .offset(offset)
+        .all()
+    )

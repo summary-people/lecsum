@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from app.crud import quiz_crud, file_crud
 from app.db.quiz_schemas import *
 from app.services import vector_service
-from app.core.llm_client import final_reflection_chain , grade_chain, enrich_chain
+from app.core.llm_client import quiz_critic_refiner_chain , grade_chain, enrich_chain
 from app.core.searches import search_and_format_run
 
 
@@ -39,7 +39,7 @@ async def generate_and_save_quiz(db: Session, request: QuizRequest) -> QuizRespo
 
     # [LLM] 퀴즈 생성
     # result는 QuizResponse Pydantic 객체 (quizzes=[QuizItem, ...])
-    result = final_reflection_chain.invoke({
+    result = quiz_critic_refiner_chain.invoke({
         "context": context_text,
         "recent_quizzes": recent_quizzes_str
     })

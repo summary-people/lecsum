@@ -85,7 +85,7 @@ def build_reflection_chain():
         | RunnableLambda(route_quiz_generation)
     )
 
-final_reflection_chain = build_reflection_chain()
+quiz_critic_refiner_chain = build_reflection_chain()
 
 grade_chain: Runnable = build_structured_chain(
     chatOpenAI,

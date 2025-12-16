@@ -1,6 +1,7 @@
 # 모의고사 요청/응답 DTO
 from pydantic import BaseModel, Field
 from typing import List, Literal, Optional
+from datetime import datetime
 
 class QuizRequest(BaseModel):
     pdf_id: int
@@ -44,3 +45,24 @@ class GradeResponse(BaseModel):
     attempt_id: int
     score: int
     results: List[SingleGradeResult]
+
+# Quiz (개별 문제) DTO
+class QuizDto(BaseModel):
+    id: int
+    number: int
+    type: Optional[str] = None
+    question: str
+    options: Optional[list | dict] = None  # JSON 필드 대응
+    
+    class Config:
+        from_attributes = True # ORM 객체(SQLAlchemy)를 Pydantic 모델로 변환 허용
+
+# QuizSet (문제지) DTO
+class QuizSetDto(BaseModel):
+    id: int
+    pdf_id: int
+    created_at: datetime
+    quizs: List[QuizDto] = [] 
+
+    class Config:
+        from_attributes = True

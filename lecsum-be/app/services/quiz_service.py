@@ -213,3 +213,10 @@ async def grade_and_enrich_pipeline(formatted_block: str, quizzes: list, user_an
             grading_result.results[idx].feedback = new_feedback
             
     return grading_result
+
+def get_quiz_sets(db: Session, pdf_id: int):
+    quiz_sets = quiz_crud.get_quiz_sets_by_pdf(db, pdf_id)
+    if not quiz_sets:
+         return []
+         
+    return quiz_sets

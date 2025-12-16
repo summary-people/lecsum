@@ -1,4 +1,4 @@
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import select, desc
 from app.models.quiz import *
 from app.db.quiz_schemas import *
@@ -82,3 +82,8 @@ def get_recent_quiz_questions(db: Session, pdf_id: int, limit: int = 20) -> List
     # [question1, question2, ...] 형태의 리스트 반환
     return db.execute(stmt).scalars().all()
 
+def get_quiz_sets_by_pdf(db: Session, pdf_id: int):
+    return db.query(QuizSet)\
+        .options(joinedload(QuizSet.quizs))\
+        .filter(QuizSet.pdf_id == pdf_id)\
+        .all()

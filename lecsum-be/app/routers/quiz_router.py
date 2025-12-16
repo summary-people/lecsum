@@ -1,6 +1,7 @@
 # 모의시험 생성 및 채점 API
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
+from typing import List
 
 
 from app.db.quiz_schemas import (
@@ -8,13 +9,14 @@ from app.db.quiz_schemas import (
     QuizResponse,
     GradeRequest,
     GradeResponse,
+    QuizSetDto
 )
 from app.db.schemas import CommonResponse
 from app.db.database import get_db
 from app.services import quiz_service
 
 router = APIRouter(
-    prefix="/api/quizs",
+    prefix="/api/quizzes",
     tags=["Quiz"],
 )
 
@@ -178,3 +180,18 @@ async def grade_batch_quiz(
         message="채점이 완료되었습니다.",
         data=result,
     )
+
+@router.get("/quiz-sets", response_model=CommonResponse[List[QuizSetDto]])
+async def get_quiz_list(pdf_id: int, db: Session = Depends(get_db)):
+    """
+    특정 파일에 생성된 퀴즈 세트 목록 조회
+    """
+    result = quiz_service.get_quiz_sets(db, pdf_id)
+    
+    return CommonResponse(        
+        data=result
+    )
+
+@router.delete("")
+async def delete_quizs():
+    return None

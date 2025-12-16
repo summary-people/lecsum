@@ -87,3 +87,13 @@ def get_quiz_sets_by_pdf(db: Session, pdf_id: int):
         .options(joinedload(QuizSet.quizs))\
         .filter(QuizSet.pdf_id == pdf_id)\
         .all()
+
+def remove_quiz_set(db: Session, quiz_set_id: int) -> bool:
+    target_set = db.query(QuizSet).filter(QuizSet.id == quiz_set_id).first()
+    
+    if target_set:
+        db.delete(target_set)
+        db.commit()
+        return True # 삭제 성공
+        
+    return False # 삭제 대상 없음

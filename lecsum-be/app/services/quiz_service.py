@@ -220,3 +220,13 @@ def get_quiz_sets(db: Session, pdf_id: int):
          return []
          
     return quiz_sets
+
+def remove_quiz_sets(db: Session, quiz_set_id: int):
+    is_deleted = quiz_crud.remove_quiz_set(db, quiz_set_id)
+    
+    if not is_deleted:        
+        raise HTTPException(
+            status_code=404, 
+            detail="해당 퀴즈 세트를 찾을 수 없습니다."
+        )
+    return None

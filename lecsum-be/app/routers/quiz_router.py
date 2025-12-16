@@ -192,6 +192,16 @@ async def get_quiz_list(pdf_id: int, db: Session = Depends(get_db)):
         data=result
     )
 
-@router.delete("")
-async def delete_quizs():
-    return None
+@router.delete("/quiz-sets/{quiz_set_id}", response_model=CommonResponse[None])
+async def delete_quiz_set(quiz_set_id: int, db: Session = Depends(get_db)):
+    """
+    특정 퀴즈 세트(문제지) 삭제
+    """
+    quiz_service.remove_quiz_sets(db, quiz_set_id)
+
+    return CommonResponse(   
+        message="퀴즈 세트 삭제가 완료되었습니다.",     
+        data=None
+    )
+    
+    

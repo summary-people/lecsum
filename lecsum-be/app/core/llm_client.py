@@ -26,6 +26,11 @@ chatOpenAI = ChatOpenAI(
     temperature=0,
 )
 
+chatbot_llm = ChatOpenAI(
+    temperature=0.7,
+    model="gpt-4o-mini",
+)
+
 # -----------------------------
 # 자유 텍스트 출력 체인
 # -----------------------------

@@ -14,7 +14,7 @@ from app.services import chatbot_service
 
 router = APIRouter(
     prefix="/api/chatbot",
-    tags=["chatbot"]
+    tags=["Chatbot"]
 )
 
 # Q&A 챗봇 API

@@ -8,7 +8,7 @@ from fastapi import HTTPException
 from app.db.mentor_schemas import ChatRequest, ChatResponse, RecommendRequest, RecommendResponse
 from app.db.vector_store import get_vector_store
 from app.core.llm_client import chatbot_llm, chatOpenAI
-from app.core.prompt_templates import (
+from app.core.prompt_templates.chatbot_prompt import (
     get_chatbot_system_prompt,
     get_recommendation_system_prompt,
     build_recommendation_prompt

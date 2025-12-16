@@ -11,7 +11,7 @@ from app.core.searches import search_and_format_run
 
 
 async def generate_and_save_quiz(db: Session, request: QuizRequest) -> QuizResponse:
-    # 1. [MySQL] pdf_id로 PDF 정보(UUID) 조회
+    # [MySQL] pdf_id로 PDF 정보(UUID) 조회
     pdf = file_crud.get_pdf_by_id(db, request.pdf_id)
     if not pdf:
         raise HTTPException(status_code=404, detail="PDF를 찾을 수 없습니다.")
@@ -19,17 +19,30 @@ async def generate_and_save_quiz(db: Session, request: QuizRequest) -> QuizRespo
     # UUID 추출 (VectorDB 검색용)
     file_uuid = pdf.uuid 
 
-    # 2. [VectorDB] 관련 문서 검색
+    # [VectorDB] 관련 문서 검색
     # file_id 필터에 찾아낸 UUID를 넣습니다.
     retriever = vector_service.get_retriever(file_uuid)
     context_text = await vector_service.get_relevant_documents(retriever, request.query)
 
     if not context_text:
         raise HTTPException(status_code=400, detail="관련된 내용을 찾을 수 없어 퀴즈를 생성할 수 없습니다.")
+    
+    # 최근 생성된 퀴즈 20개 조회
+    recent_questions = quiz_crud.get_recent_quiz_questions(db, request.pdf_id, limit=20)
+    
+    # 프롬프트용 문자열로 포맷팅
+    if not recent_questions:
+        recent_quizzes_str = "없음 (이 PDF에서 생성되는 첫 퀴즈입니다.)"
+    else:
+        # 리스트를 줄바꿈 문자열로 변환
+        recent_quizzes_str = "\n".join([f"- {q}" for q in recent_questions])
 
-    # 3. [LLM] 퀴즈 생성 (Invoke)
+    # [LLM] 퀴즈 생성
     # result는 QuizResponse Pydantic 객체 (quizzes=[QuizItem, ...])
-    result = final_reflection_chain.invoke({"context": context_text})
+    result = final_reflection_chain.invoke({
+        "context": context_text,
+        "recent_quizzes": recent_quizzes_str
+    })
 
     for quiz in result.quizzes:
         if quiz.type == "true_false":
@@ -38,14 +51,14 @@ async def generate_and_save_quiz(db: Session, request: QuizRequest) -> QuizRespo
                 quiz.options = ["O", "X"]
 
     
-    # 4. [MySQL] 생성된 퀴즈 저장
-    # 4-1. 퀴즈 세트 생성
+    # [MySQL] 생성된 퀴즈 저장
+    # 퀴즈 세트 생성
     quiz_set = quiz_crud.create_quiz_set(db, pdf.id)
     
-    # 4-2. 개별 문제 저장
+    # 개별 문제 저장
     saved_quizzes = quiz_crud.create_quiz_list(db, quiz_set.id, result.quizzes)
 
-    # 5. [수정] 저장된 데이터(ID 포함)로 Response 구성하여 반환
+    # 저장된 데이터로 Response 구성하여 반환
     response_items = []
     for q in saved_quizzes:
         response_items.append(QuizItem(

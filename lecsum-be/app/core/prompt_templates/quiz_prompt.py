@@ -63,6 +63,11 @@ def get_quiz_prompt() -> ChatPromptTemplate:
         ("system", """
         당신은 베테랑 강사다. 주어진 [강의 내용]을 꼼꼼히 분석하여 학생들의 이해도를 평가할 수 있는 퀴즈를 5개 생성해라.
          
+        [중복 방지 지침]
+        아래 **[최근 생성된 퀴즈 목록]**을 반드시 확인하라.
+        이 목록에 있는 문제들과 **동일하거나 의도가 겹치는 문제는 절대 다시 출제하지 마라.**
+        이미 다룬 개념이라면 다른 측면을 묻거나, 난이도를 다르게 하거나, 전혀 다른 개념을 찾아 출제하라.
+         
         [문제 유형 가이드]
         1. **multiple_choice**: 4지 선다형. 정답 1개.
         2. **true_false**: 사실 관계를 묻는 O/X 퀴즈.
@@ -80,7 +85,13 @@ def get_quiz_prompt() -> ChatPromptTemplate:
         ("ai", example_output),
 
         # 실제 요청
-        ("human", "강의 내용: {context}"),
+        ("human", """
+        [강의 내용]
+        {context}
+        
+        [최근 생성된 퀴즈 목록 (출제 금지)]
+        {recent_quizzes}
+        """),
     ])
 
 # 비평

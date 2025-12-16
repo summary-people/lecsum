@@ -1,4 +1,5 @@
 from sqlalchemy.orm import Session
+from sqlalchemy import select, desc
 from app.models import quiz
 from app.db.quiz_schemas import *
 
@@ -67,3 +68,16 @@ def update_attempt_score(db: Session, attempt_id: int, total_count: int, correct
         attempt.quiz_count = total_count
         attempt.correct_count = correct_count
         attempt.score = score
+
+# 최근 생성된 퀴즈 20개 반환
+def get_recent_quiz_questions(db: Session, pdf_id: int, limit: int = 20) -> List[str]:
+    stmt = (
+        select(quiz.Quiz.question)
+        .join(quiz.QuizSet, quiz.Quiz.quiz_set_id == quiz.QuizSet.id)
+        .where(quiz.QuizSet.pdf_id == pdf_id)
+        .order_by(desc(quiz.Quiz.id))
+        .limit(limit)
+    )
+    
+    # [question1, question2, ...] 형태의 리스트 반환
+    return db.execute(stmt).scalars().all()

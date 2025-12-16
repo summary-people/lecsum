@@ -66,3 +66,23 @@ class QuizSetDto(BaseModel):
 
     class Config:
         from_attributes = True
+# [Response] 오답 노트 응답
+class WrongAnswerItem(BaseModel):
+    quiz_id: int
+    question: str
+    type: str
+    options: List[str]
+    correct_answer: str
+    explanation: str
+    user_answer: str          # 내가 틀린 답
+    attempt_id: int           # 어느 시험에서 틀렸는지
+
+# [Request] 오답 재시험 생성 요청
+class RetryQuizRequest(BaseModel):
+    quiz_ids: List[int] = Field(description="틀린 문제 ID 리스트")
+
+# [Response] 오답 재시험 생성 응답
+class RetryQuizResponse(BaseModel):
+    quiz_set_ids: List[int] = Field(description="생성된 퀴즈 세트 ID 리스트 (각 문제가 원본 PDF에 연결)")
+    total_questions: int
+    quizzes: List[QuizItem]

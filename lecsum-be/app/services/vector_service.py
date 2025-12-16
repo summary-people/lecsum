@@ -4,17 +4,22 @@ from langchain_openai import OpenAIEmbeddings
 from app.core.enums import ChromaDB, CHROMA_PERSIST_DIR
 
 
+_vectorstore: Chroma | None = None
+
 def get_vectorstore() -> Chroma:
     """
-    Chroma VectorStore 인스턴스 반환
+    Chroma VectorStore 싱글톤 인스턴스 반환
     """
-    return Chroma(
-        collection_name=ChromaDB.COLLECTION_NAME.value,
-        embedding_function=OpenAIEmbeddings(
-            model="text-embedding-3-small"
-        ),
-        persist_directory=CHROMA_PERSIST_DIR,
-    )
+    global _vectorstore
+    if _vectorstore is None:
+        _vectorstore = Chroma(
+            collection_name=ChromaDB.COLLECTION_NAME.value,
+            embedding_function=OpenAIEmbeddings(
+                model="text-embedding-3-small"
+            ),
+            persist_directory=CHROMA_PERSIST_DIR,
+        )
+    return _vectorstore
 
 
 def get_retriever(document_uuid: str):

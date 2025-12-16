@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from app.crud import quiz_crud, file_crud
 from app.db.quiz_schemas import *
 from app.services import vector_service
-from app.core.llm_client import quiz_critic_refiner_chain , grade_chain, enrich_chain
+from app.core.llm_client import quiz_critic_refiner_chain , grade_chain, enrich_chain, retry_quiz_chain
 from app.core.searches import search_and_format_run
 
 
@@ -230,3 +230,108 @@ def remove_quiz_sets(db: Session, quiz_set_id: int):
             detail="해당 퀴즈 세트를 찾을 수 없습니다."
         )
     return None
+def get_wrong_answer_list(db: Session, limit: int, offset: int):
+    """
+    오답 노트 목록 반환
+    """
+    results = quiz_crud.get_wrong_answers(db, limit, offset)
+
+    # 틀린 문제가 없는 경우 예외 처리
+    if not results:
+        raise HTTPException(
+            status_code=404,
+            detail="틀린 문제가 없습니다. 모든 문제를 정답으로 맞추셨습니다!"
+        )
+
+    items = []
+    for result, quiz_obj in results:
+
+        items.append(WrongAnswerItem(
+            quiz_id=quiz_obj.id,
+            question=quiz_obj.question,
+            type=quiz_obj.type,
+            options=quiz_obj.options or [],
+            correct_answer=quiz_obj.correct_answer,
+            explanation=quiz_obj.explanation,
+            user_answer=result.user_answer,
+            attempt_id=result.attempt_id,
+            created_at=result.created_at
+        ))
+
+    return items
+
+async def create_retry_quiz(db: Session, request: RetryQuizRequest) -> RetryQuizResponse:
+    """
+    틀린 문제 기반 재시험 생성
+    각 틀린 문제당 유사한 문제 3개씩 생성
+    각 문제는 원본 PDF에 개별적으로 연결됨
+    """
+    # 틀린 문제들 조회
+    quizzes = quiz_crud.get_quizzes_by_ids(db, request.quiz_ids)
+
+    if not quizzes:
+        raise HTTPException(status_code=404, detail="문제를 찾을 수 없습니다.")
+
+    # 전체 생성된 문제 및 QuizSet ID 리스트
+    all_saved_quizzes = []
+    quiz_set_ids = []
+
+    # 각 틀린 문제마다 처리
+    for original_quiz in quizzes:
+        # 각 문제의 원본 PDF ID 조회
+        quiz_set = db.query(quiz_crud.quiz.QuizSet).filter(
+            quiz_crud.quiz.QuizSet.id == original_quiz.quiz_set_id
+        ).first()
+
+        if not quiz_set:
+            raise HTTPException(
+                status_code=404,
+                detail=f"문제 세트를 찾을 수 없습니다. (quiz_id={original_quiz.id})"
+            )
+
+        # 해당 PDF에 대한 새 QuizSet 생성
+        new_quiz_set = quiz_crud.create_quiz_set(db, quiz_set.pdf_id)
+        quiz_set_ids.append(new_quiz_set.id)
+
+        # 원본 문제 정보를 문자열로 포맷팅
+        original_quiz_info = f"""
+문제 유형: {original_quiz.type}
+질문: {original_quiz.question}
+보기: {original_quiz.options if original_quiz.options else "없음"}
+정답: {original_quiz.correct_answer}
+해설: {original_quiz.explanation}
+        """
+
+        # LLM 호출하여 유사 문제 3개 생성
+        retry_result: QuizResponse = await retry_quiz_chain.ainvoke({
+            "original_quiz": original_quiz_info
+        })
+
+        # 생성된 문제가 3개가 아니면 에러
+        if len(retry_result.quizzes) != 3:
+            raise HTTPException(
+                status_code=500,
+                detail=f"문제 생성 오류: {len(retry_result.quizzes)}개 생성됨 (예상: 3개)"
+            )
+
+        # 생성된 문제들을 해당 QuizSet에 저장
+        saved_quizzes = quiz_crud.create_quiz_list(db, new_quiz_set.id, retry_result.quizzes)
+        all_saved_quizzes.extend(saved_quizzes)
+
+    # 응답 구성
+    response_items = []
+    for q in all_saved_quizzes:
+        response_items.append(QuizItem(
+            id=q.id,
+            question=q.question,
+            type=q.type,
+            options=q.options if q.options else [],
+            correct_answer=q.correct_answer,
+            explanation=q.explanation
+        ))
+
+    return RetryQuizResponse(
+        quiz_set_ids=quiz_set_ids,  # 여러 QuizSet ID 반환
+        total_questions=len(response_items),
+        quizzes=response_items
+    )

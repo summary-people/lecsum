@@ -1,3 +1,6 @@
+import os
+from dotenv import load_dotenv
+
 from langchain_openai import ChatOpenAI
 from langchain_core.runnables import Runnable, RunnablePassthrough, RunnableLambda
 from langchain_core.output_parsers import StrOutputParser
@@ -7,12 +10,30 @@ from app.db.quiz_schemas import *
 from app.core.prompt_templates.summary_prompt import get_summary_prompt
 from app.core.prompt_templates.keyword_prompt import get_keyword_prompt
 from app.core.prompt_templates.quiz_prompt import (get_quiz_prompt, get_grading_prompt)
-
+from app.core.prompt_templates.retry_quiz_prompt import get_retry_quiz_prompt
 from app.db.quiz_schemas import QuizResponse, GradeResultList
 
-chatOpenAI = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+# 환경변수 로드
+load_dotenv()
 
-# 자유 텍스트 체인 (요약, 키워드)
+# API 키 검증
+if not os.getenv("OPENAI_API_KEY"):
+    raise ValueError("OPENAI_API_KEY가 설정되지 않았습니다. .env 파일을 확인하세요.")
+
+# 공통 LLM 인스턴스
+chatOpenAI = ChatOpenAI(
+    model="gpt-4o-mini",
+    temperature=0,
+)
+
+chatbot_llm = ChatOpenAI(
+    temperature=0.7,
+    model="gpt-4o-mini",
+)
+
+# -----------------------------
+# 자유 텍스트 출력 체인
+# -----------------------------
 summary_chain: Runnable = (
     get_summary_prompt()
     | chatOpenAI
@@ -25,14 +46,24 @@ keyword_chain: Runnable = (
     | StrOutputParser()
 )
 
-# 정형 출력 체인 (퀴즈, 채점)
-def build_structured_chain(llm, prompt, output_schema) -> Runnable:
+# -----------------------------
+# 구조화 출력 체인
+# -----------------------------
+def build_structured_chain(
+    llm: ChatOpenAI,
+    prompt,
+    output_schema,
+) -> Runnable:
+    """
+    Structured Output(JSON Schema) 기반 체인 생성
+    """
     structured_llm = llm.with_structured_output(output_schema)
     return prompt | structured_llm
 
 def build_llm_chain(llm, prompt) -> Runnable:
     chain = prompt | llm | StrOutputParser()
     return chain
+
 
 quiz_chain: Runnable = build_structured_chain(
     chatOpenAI,
@@ -63,7 +94,7 @@ def route_quiz_generation(info):
         print("⚠️ 수정 필요: Refiner를 가동합니다.")
         return refiner_chain
 
-def build_reflection_chain():
+def build_quiz_multichain():
     return (
         # Step 1: 초안 생성
         RunnablePassthrough.assign(
@@ -85,15 +116,23 @@ def build_reflection_chain():
         | RunnableLambda(route_quiz_generation)
     )
 
-quiz_critic_refiner_chain = build_reflection_chain()
+# MultiChain
+quiz_critic_refiner_chain = build_quiz_multichain()
 
+# 채점 - 해설 보강 Chain
 grade_chain: Runnable = build_structured_chain(
     chatOpenAI,
     get_grading_prompt(),
     GradeResultList,
 )
-
 enrich_chain: Runnable = build_llm_chain(
     ChatOpenAI(model="gpt-4o-mini", temperature=0.7),
     get_enrichment_prompt()
+)
+
+# 오답 재시험 체인
+retry_quiz_chain: Runnable = build_structured_chain(
+    chatOpenAI,
+    get_retry_quiz_prompt(),
+    QuizResponse, # 퀴즈 생성과 동일한 방식으로 재시험 생성
 )

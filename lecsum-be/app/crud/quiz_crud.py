@@ -1,11 +1,11 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import select, desc
-from app.models import quiz
+from app.models.quiz import *
 from app.db.quiz_schemas import *
 
 # 퀴즈 세트(시험지) 생성
 def create_quiz_set(db: Session, pdf_id: int):
-    db_quiz_set = quiz.QuizSet(pdf_id=pdf_id)
+    db_quiz_set = QuizSet(pdf_id=pdf_id)
     db.add(db_quiz_set)
     db.commit()
     db.refresh(db_quiz_set)
@@ -16,7 +16,7 @@ def create_quiz_list(db: Session, quiz_set_id: int, quizzes: list[QuizItem]):
     db_quizzes = []
     
     for index, q in enumerate(quizzes):
-        db_quiz = quiz.Quiz(
+        db_quiz = Quiz(
             quiz_set_id=quiz_set_id,
             number=index + 1,       # 문제 번호 (1번부터 시작)
             type=q.type,
@@ -32,13 +32,13 @@ def create_quiz_list(db: Session, quiz_set_id: int, quizzes: list[QuizItem]):
     
     return db_quizzes
 
-def get_quizzes_by_ids(db: Session, quiz_ids: List[int]) -> List[quiz.Quiz]:
-    return db.query(quiz.Quiz).filter(quiz.Quiz.id.in_(quiz_ids)).all()
+def get_quizzes_by_ids(db: Session, quiz_ids: List[int]) -> List[Quiz]:
+    return db.query(Quiz).filter(Quiz.id.in_(quiz_ids)).all()
 
 # 응시 기록(Attempt) 생성
-def create_attempt(db: Session, quiz_set_id: int) -> quiz.Attempt:
+def create_attempt(db: Session, quiz_set_id: int) -> Attempt:
     
-    attempt = quiz.Attempt(
+    attempt = Attempt(
         quiz_set_id=quiz_set_id,
         score=0,
         quiz_count=0,
@@ -52,7 +52,7 @@ def create_attempt(db: Session, quiz_set_id: int) -> quiz.Attempt:
 def create_quiz_results(db: Session, attempt_id: int, grade_data: List[dict]):
    
     results = [
-        quiz.QuizResult(
+        QuizResult(
             attempt_id=attempt_id,
             quiz_id=item['quiz_id'],
             user_answer=item['user_answer'],
@@ -63,7 +63,7 @@ def create_quiz_results(db: Session, attempt_id: int, grade_data: List[dict]):
 
 # 최종 점수 업데이트
 def update_attempt_score(db: Session, attempt_id: int, total_count: int, correct_count: int, score: int):
-    attempt = db.query(quiz.Attempt).filter(quiz.Attempt.id == attempt_id).first()
+    attempt = db.query(Attempt).filter(Attempt.id == attempt_id).first()
     if attempt:
         attempt.quiz_count = total_count
         attempt.correct_count = correct_count
@@ -72,12 +72,13 @@ def update_attempt_score(db: Session, attempt_id: int, total_count: int, correct
 # 최근 생성된 퀴즈 20개 반환
 def get_recent_quiz_questions(db: Session, pdf_id: int, limit: int = 20) -> List[str]:
     stmt = (
-        select(quiz.Quiz.question)
-        .join(quiz.QuizSet, quiz.Quiz.quiz_set_id == quiz.QuizSet.id)
-        .where(quiz.QuizSet.pdf_id == pdf_id)
-        .order_by(desc(quiz.Quiz.id))
+        select(Quiz.question)
+        .join(QuizSet, Quiz.quiz_set_id == QuizSet.id)
+        .where(QuizSet.pdf_id == pdf_id)
+        .order_by(desc(Quiz.id))
         .limit(limit)
     )
     
     # [question1, question2, ...] 형태의 리스트 반환
     return db.execute(stmt).scalars().all()
+

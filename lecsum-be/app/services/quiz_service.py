@@ -22,7 +22,7 @@ async def generate_and_save_quiz(db: Session, request: QuizRequest) -> QuizRespo
     # [VectorDB] 관련 문서 검색
     # file_id 필터에 찾아낸 UUID를 넣습니다.
     retriever = vector_service.get_retriever(file_uuid)
-    context_text = await vector_service.get_relevant_documents(retriever, "중요")
+    context_text = await vector_service.get_relevant_documents(retriever, "핵심 내용")
 
     if not context_text:
         raise HTTPException(status_code=400, detail="관련된 내용을 찾을 수 없어 퀴즈를 생성할 수 없습니다.")

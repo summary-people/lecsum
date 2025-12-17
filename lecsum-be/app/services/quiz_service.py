@@ -22,7 +22,7 @@ async def generate_and_save_quiz(db: Session, request: QuizRequest) -> QuizRespo
     # [VectorDB] 관련 문서 검색
     # file_id 필터에 찾아낸 UUID를 넣습니다.
     retriever = vector_service.get_retriever(file_uuid)
-    context_text = await vector_service.get_relevant_documents(retriever, request.query)
+    context_text = await vector_service.get_relevant_documents(retriever, "핵심 내용")
 
     if not context_text:
         raise HTTPException(status_code=400, detail="관련된 내용을 찾을 수 없어 퀴즈를 생성할 수 없습니다.")
@@ -169,7 +169,7 @@ async def run_enrichment_task(quiz, user_ans, original_feedback):
     except Exception as e:
         print(f"⚠️ Enrichment Failed for quiz {quiz.id}: {e}")
         # 검색이 실패했더라도, 최소한의 기존 해설은 제공
-        return f"아쉽게도 틀렸습니다.\n\n[기존 해설]\n{quiz.explanation}\n\n(일시적인 오류로 심화 해설을 불러오지 못했습니다.)"
+        return f"아쉽게도 틀렸습니다.\n\n[해설]\n{quiz.explanation}"
 
 async def grade_and_enrich_pipeline(formatted_block: str, quizzes: list, user_answers: list) -> GradeResultList:
     """
@@ -198,7 +198,7 @@ async def grade_and_enrich_pipeline(formatted_block: str, quizzes: list, user_an
             quiz = quizzes[i]
             user_ans = user_answers[i]
             
-            # 태스크 예약 (아직 실행 안 됨)
+            # 태스크 예약
             enrich_tasks.append(
                 run_enrichment_task(quiz, user_ans, result.feedback)
             )

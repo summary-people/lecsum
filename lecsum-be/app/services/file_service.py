@@ -13,6 +13,7 @@ from langchain_chroma import Chroma
 from langchain_openai import OpenAIEmbeddings
 from langchain_core.documents import Document
 
+
 from app.core.llm_client import summary_chain, keyword_chain
 
 from pptx import Presentation

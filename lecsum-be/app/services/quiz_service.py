@@ -1,14 +1,17 @@
 # 문제 생성, 채점, 해설 생성 로직
+import asyncio
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from app.crud import quiz_crud, file_crud
 from app.db.quiz_schemas import *
 from app.services import vector_service
-from app.core.llm_client import quiz_chain, grade_chain, retry_quiz_chain
+from app.core.llm_client import quiz_critic_refiner_chain , grade_chain, enrich_chain, retry_quiz_chain
+from app.core.searches import search_and_format_run
+
 
 async def generate_and_save_quiz(db: Session, request: QuizRequest) -> QuizResponse:
-    # 1. [MySQL] pdf_id로 PDF 정보(UUID) 조회
+    # [MySQL] pdf_id로 PDF 정보(UUID) 조회
     pdf = file_crud.get_pdf_by_id(db, request.pdf_id)
     if not pdf:
         raise HTTPException(status_code=404, detail="PDF를 찾을 수 없습니다.")
@@ -16,17 +19,30 @@ async def generate_and_save_quiz(db: Session, request: QuizRequest) -> QuizRespo
     # UUID 추출 (VectorDB 검색용)
     file_uuid = pdf.uuid 
 
-    # 2. [VectorDB] 관련 문서 검색
+    # [VectorDB] 관련 문서 검색
     # file_id 필터에 찾아낸 UUID를 넣습니다.
     retriever = vector_service.get_retriever(file_uuid)
     context_text = await vector_service.get_relevant_documents(retriever, request.query)
 
     if not context_text:
         raise HTTPException(status_code=400, detail="관련된 내용을 찾을 수 없어 퀴즈를 생성할 수 없습니다.")
+    
+    # 최근 생성된 퀴즈 20개 조회
+    recent_questions = quiz_crud.get_recent_quiz_questions(db, request.pdf_id, limit=20)
+    
+    # 프롬프트용 문자열로 포맷팅
+    if not recent_questions:
+        recent_quizzes_str = "없음 (이 PDF에서 생성되는 첫 퀴즈입니다.)"
+    else:
+        # 리스트를 줄바꿈 문자열로 변환
+        recent_quizzes_str = "\n".join([f"- {q}" for q in recent_questions])
 
-    # 3. [LLM] 퀴즈 생성 (Invoke)
+    # [LLM] 퀴즈 생성
     # result는 QuizResponse Pydantic 객체 (quizzes=[QuizItem, ...])
-    result = quiz_chain.invoke({"context": context_text})
+    result = quiz_critic_refiner_chain.invoke({
+        "context": context_text,
+        "recent_quizzes": recent_quizzes_str
+    })
 
     for quiz in result.quizzes:
         if quiz.type == "true_false":
@@ -35,14 +51,14 @@ async def generate_and_save_quiz(db: Session, request: QuizRequest) -> QuizRespo
                 quiz.options = ["O", "X"]
 
     
-    # 4. [MySQL] 생성된 퀴즈 저장
-    # 4-1. 퀴즈 세트 생성
+    # [MySQL] 생성된 퀴즈 저장
+    # 퀴즈 세트 생성
     quiz_set = quiz_crud.create_quiz_set(db, pdf.id)
     
-    # 4-2. 개별 문제 저장
+    # 개별 문제 저장
     saved_quizzes = quiz_crud.create_quiz_list(db, quiz_set.id, result.quizzes)
 
-    # 5. [수정] 저장된 데이터(ID 포함)로 Response 구성하여 반환
+    # 저장된 데이터로 Response 구성하여 반환
     response_items = []
     for q in saved_quizzes:
         response_items.append(QuizItem(
@@ -83,13 +99,12 @@ async def grade_quiz_set(db: Session, request: GradeRequest) -> GradeResponse:
         - 사용자 답: {user_ans}
         \n"""
 
-    # 3. LLM 호출
-    chain = grade_chain
-    llm_result: GradeResultList = await chain.ainvoke({"formatted_quiz_block": formatted_block})
-    
-    # 결과 개수 검증
-    if len(llm_result.results) != len(ordered_quizzes):
-        raise HTTPException(status_code=500, detail="채점 결과의 개수가 문제 개수와 일치하지 않습니다.")
+    # 3. 채점 및 해설 보강 LLM 호출
+    llm_result: GradeResultList = await grade_and_enrich_pipeline(
+        formatted_block, 
+        ordered_quizzes, 
+        request.user_answer_list
+    )
 
     # 4. DB 저장을 위한 데이터 준비 및 계산
     correct_count = 0
@@ -132,6 +147,89 @@ async def grade_quiz_set(db: Session, request: GradeRequest) -> GradeResponse:
         db.rollback()
         raise e
     
+
+
+async def run_enrichment_task(quiz, user_ans, original_feedback):
+    """개별 오답에 대해 검색을 수행하고 해설을 생성하는 비동기 태스크"""
+    try:
+        # A. Google Search (비동기 호출)
+        search_query = f"{quiz.question} 개념 및 예시"
+        formatted_search = await search_and_format_run(search_query)
+
+        # B. Enrichment Chain 실행
+        enriched_text = await enrich_chain.ainvoke({
+            "question": quiz.question,
+            "user_answer": user_ans,
+            "correct_answer": quiz.correct_answer,
+            "explanation": quiz.explanation,
+            "search_results": formatted_search
+        })
+        return enriched_text
+        
+    except Exception as e:
+        print(f"⚠️ Enrichment Failed for quiz {quiz.id}: {e}")
+        # 검색이 실패했더라도, 최소한의 기존 해설은 제공
+        return f"아쉽게도 틀렸습니다.\n\n[기존 해설]\n{quiz.explanation}\n\n(일시적인 오류로 심화 해설을 불러오지 못했습니다.)"
+
+async def grade_and_enrich_pipeline(formatted_block: str, quizzes: list, user_answers: list) -> GradeResultList:
+    """
+    [MultiChain Pipeline]
+    1. Grade Chain 실행 (일괄 채점)
+    2. 오답 필터링 (Router)
+    3. Enrichment Chain 병렬 실행 (Parallel Execution)
+    4. 결과 병합 (Merge)
+    """
+    
+    # Step 1: 1차 채점 (Batch Grading)
+    print("running grading chain...")
+    grading_result: GradeResultList = await grade_chain.ainvoke({"formatted_quiz_block": formatted_block})
+
+    # 결과 개수 검증
+    if len(grading_result.results) != len(quizzes):
+        raise ValueError("채점 결과의 개수가 문제 개수와 일치하지 않습니다.")
+
+    # Step 2: 오답에 대한 보강 작업 준비
+    enrich_tasks = []
+    target_indices = []
+
+    for i, result in enumerate(grading_result.results):
+        if not result.is_correct: # 오답 -> Enrichment 대상
+            target_indices.append(i)
+            quiz = quizzes[i]
+            user_ans = user_answers[i]
+            
+            # 태스크 예약 (아직 실행 안 됨)
+            enrich_tasks.append(
+                run_enrichment_task(quiz, user_ans, result.feedback)
+            )
+
+    # Step 3: 병렬 실행 (RAG Enrichment)
+    if enrich_tasks:
+        print(f"⚠️ {len(enrich_tasks)}개의 오답에 대해 심화 해설 생성 중...")
+        enriched_feedbacks = await asyncio.gather(*enrich_tasks)
+        
+        # 결과 덮어쓰기
+        for idx, new_feedback in zip(target_indices, enriched_feedbacks):
+            grading_result.results[idx].feedback = new_feedback
+            
+    return grading_result
+
+def get_quiz_sets(db: Session, pdf_id: int):
+    quiz_sets = quiz_crud.get_quiz_sets_by_pdf(db, pdf_id)
+    if not quiz_sets:
+         return []
+         
+    return quiz_sets
+
+def remove_quiz_sets(db: Session, quiz_set_id: int):
+    is_deleted = quiz_crud.remove_quiz_set(db, quiz_set_id)
+    
+    if not is_deleted:        
+        raise HTTPException(
+            status_code=404, 
+            detail="해당 퀴즈 세트를 찾을 수 없습니다."
+        )
+    return None
 def get_wrong_answer_list(db: Session, limit: int, offset: int):
     """
     오답 노트 목록 반환
@@ -181,8 +279,8 @@ async def create_retry_quiz(db: Session, request: RetryQuizRequest) -> RetryQuiz
     # 각 틀린 문제마다 처리
     for original_quiz in quizzes:
         # 각 문제의 원본 PDF ID 조회
-        quiz_set = db.query(quiz_crud.quiz.QuizSet).filter(
-            quiz_crud.quiz.QuizSet.id == original_quiz.quiz_set_id
+        quiz_set = db.query(quiz_crud.QuizSet).filter(
+            quiz_crud.QuizSet.id == original_quiz.quiz_set_id
         ).first()
 
         if not quiz_set:

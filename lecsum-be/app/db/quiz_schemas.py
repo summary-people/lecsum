@@ -1,6 +1,7 @@
 # 모의고사 요청/응답 DTO
 from pydantic import BaseModel, Field
 from typing import List, Literal, Optional
+from datetime import datetime
 
 class QuizRequest(BaseModel):
     pdf_id: int
@@ -14,6 +15,10 @@ class QuizItem(BaseModel):
     options: List[str] = Field(description="객관식일 경우 보기 (없으면 빈 리스트)", default=[])
     correct_answer: str = Field(description="정답")
     explanation: str = Field(description="해설")
+
+# [New] LLM 생성 전용 출력 (quiz_set_id 제거 버전)
+class QuizGenerationOutput(BaseModel):
+    quizzes: List[QuizItem] = Field(description="생성된 퀴즈 리스트")
 
 # 퀴즈 세트 구조
 class QuizResponse(BaseModel):
@@ -41,6 +46,26 @@ class GradeResponse(BaseModel):
     score: int
     results: List[SingleGradeResult]
 
+# Quiz (개별 문제) DTO
+class QuizDto(BaseModel):
+    id: int
+    number: int
+    type: Optional[str] = None
+    question: str
+    options: Optional[list | dict] = None  # JSON 필드 대응
+    
+    class Config:
+        from_attributes = True # ORM 객체(SQLAlchemy)를 Pydantic 모델로 변환 허용
+
+# QuizSet (문제지) DTO
+class QuizSetDto(BaseModel):
+    id: int
+    pdf_id: int
+    created_at: datetime
+    quizs: List[QuizDto] = [] 
+
+    class Config:
+        from_attributes = True
 # [Response] 오답 노트 응답
 class WrongAnswerItem(BaseModel):
     quiz_id: int

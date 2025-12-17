@@ -2,12 +2,12 @@
 from typing import List
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-
 from app.db.quiz_schemas import (
     QuizRequest,
     QuizResponse,
     GradeRequest,
     GradeResponse,
+    QuizSetDto,
     WrongAnswerItem,
     RetryQuizRequest,
     RetryQuizResponse,
@@ -17,7 +17,7 @@ from app.db.database import get_db
 from app.services import quiz_service
 
 router = APIRouter(
-    prefix="/api/quizs",
+    prefix="/api/quizzes",
     tags=["Quiz"],
 )
 
@@ -35,12 +35,14 @@ PDF 문서를 기반으로 모의고사 문제를 자동 생성합니다.
 3. LLM을 이용해 문제 자동 생성
    - 빈칸 채우기 / 단어 맞추기 유형
    - 기본 5문제 생성
+   - 퀴즈 생성 - 비평 - 수정 MultiChain
 4. 생성된 퀴즈를 DB에 저장
 5. 생성된 퀴즈 세트 반환
 
 ### 활용 기술
 - VectorDB 검색 (RAG)
 - LLM 기반 문제 생성
+- 퀴즈 생성 - 비평 - 수정 MultiChain
 """,
     responses={
         200: {
@@ -105,9 +107,9 @@ async def generate_quiz(
 @router.post(
     "/grade",
     response_model=CommonResponse[GradeResponse],
-    summary="모의고사 일괄 채점",
+    summary="모의고사 채점",
     description="""
-생성된 퀴즈 세트에 대해 사용자의 답안을 받아 일괄 채점합니다.
+생성된 퀴즈 세트에 대해 사용자의 답안을 받아 채점합니다.
 
 ### 처리 절차
 1. 퀴즈 세트 ID 및 사용자 답안 입력
@@ -168,12 +170,12 @@ async def generate_quiz(
         },
     },
 )
-async def grade_batch_quiz(
+async def grade_quiz(
     request: GradeRequest,
     db: Session = Depends(get_db),
 ):
     """
-    퀴즈 답안을 받아 일괄 채점하고 결과를 저장합니다.
+    퀴즈 답안을 받아 채점하고 결과를 저장합니다.
     """
     result = await quiz_service.grade_quiz_set(db, request)
 
@@ -182,6 +184,153 @@ async def grade_batch_quiz(
         data=result,
     )
 
+
+@router.get(
+    "/quiz-sets",
+    response_model=CommonResponse[List[QuizSetDto]],
+    summary="파일별 퀴즈 세트 목록 조회",
+    description="""
+특정 파일(pdf_id)에 연관된 모든 퀴즈 세트(문제지) 목록을 조회합니다.
+
+### 처리 내용
+1. 요청받은 pdf_id로 생성된 퀴즈 세트를 DB에서 조회
+2. 각 퀴즈 세트에 포함된 문제(Quiz) 정보도 함께 로딩
+3. 생성일자 기준 내림차순 정렬하여 반환
+
+### 반환 데이터
+- 퀴즈 세트 ID
+- 생성 일자
+- 포함된 문제 개수 및 미리보기
+    """,
+    responses={
+        200: {
+            "description": "조회 성공",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "success": True,
+                        "data": [
+                            {
+                                "id": 10,
+                                "pdf_id": 3,
+                                "created_at": "2024-05-20T14:30:00",
+                                "quizs": [
+                                    {"id": 101, "question": "문제 1번..."},
+                                    {"id": 102, "question": "문제 2번..."}
+                                ]
+                            },
+                            {
+                                "id": 5,
+                                "pdf_id": 3,
+                                "created_at": "2024-05-19T09:00:00",
+                                "quizs": []
+                            }
+                        ],
+                        "message": None
+                    }
+                }
+            }
+        },
+        404: {
+            "description": "데이터 없음",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "success": False,
+                        "data": None,
+                        "message": "해당 파일에 대한 퀴즈 세트가 존재하지 않습니다."
+                    }
+                }
+            }
+        },
+        500: {
+            "description": "서버 오류",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "success": False,
+                        "data": None,
+                        "message": "목록 조회 중 서버 오류가 발생했습니다."
+                    }
+                }
+            }
+        }
+    }
+)
+async def get_quiz_list(pdf_id: int, db: Session = Depends(get_db)):
+    """
+    특정 파일에 생성된 퀴즈 세트 목록 조회
+    """
+    result = quiz_service.get_quiz_sets(db, pdf_id)
+    
+    return CommonResponse(        
+        data=result
+    )
+
+
+
+@router.delete(
+    "/quiz-sets/{quiz_set_id}",
+    response_model=CommonResponse[None],
+    summary="퀴즈 세트(문제지) 삭제",
+    description="""
+특정 퀴즈 세트를 삭제합니다. 
+**개별 문제(Quiz)**와 **풀이 기록(Attempt)**도 함께 삭제됩니다.
+
+### 주의사항
+- 삭제된 데이터는 복구할 수 없습니다.
+    """,
+    responses={
+        200: {
+            "description": "삭제 성공",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "success": True,
+                        "data": None,
+                        "message": "퀴즈 세트 삭제가 완료되었습니다."
+                    }
+                }
+            }
+        },
+        404: {
+            "description": "삭제 대상 없음",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "success": False,
+                        "data": None,
+                        "message": "해당 ID의 퀴즈 세트를 찾을 수 없습니다."
+                    }
+                }
+            }
+        },
+        500: {
+            "description": "서버 오류",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "success": False,
+                        "data": None,
+                        "message": "삭제 처리 중 오류가 발생했습니다."
+                    }
+                }
+            }
+        }
+    }
+)
+async def delete_quiz_set(quiz_set_id: int, db: Session = Depends(get_db)):
+    """
+    특정 퀴즈 세트(문제지) 삭제
+    """
+    quiz_service.remove_quiz_sets(db, quiz_set_id)
+
+    return CommonResponse(   
+        message="퀴즈 세트 삭제가 완료되었습니다.",     
+        data=None
+    )
+    
+    
 @router.get(
     "/wrong-answers",
     response_model=CommonResponse[List[WrongAnswerItem]],

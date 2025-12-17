@@ -1,9 +1,10 @@
-# 챗봇 응답, 자료 추천 로직 (VectorStore 기반, MySQL 없음)
+# 챗봇 응답, 자료 추천 로직
 from typing import List, Dict, Optional, Any
 import os
 import requests
 import json
 from fastapi import HTTPException
+from sqlalchemy.orm import Session
 
 from app.db.mentor_schemas import ChatRequest, ChatResponse, RecommendRequest, RecommendResponse
 from app.db.vector_store import get_vector_store
@@ -13,21 +14,37 @@ from app.core.prompt_templates.chatbot_prompt import (
     get_recommendation_system_prompt,
     build_recommendation_prompt
 )
+from langchain_chroma import Chroma
+from langchain_openai import OpenAIEmbeddings
+from app.core.enums import ChromaDB, CHROMA_PERSIST_DIR
+from app.crud import file_crud
 
 async def chat_with_documents(request: ChatRequest) -> ChatResponse:
     """
-    벡터 DB 기반 Q&A 챗봇 (MySQL 없음)
-    - VectorStore에서 질문과 유사한 문서 검색 (file_id 필터 적용)
+    벡터 DB 기반 Q&A 챗봇 (Chroma 사용)
+    - Chroma에서 질문과 유사한 문서 검색 (document_uuid 필터 적용)
     - 대화 히스토리 포함하여 자연스러운 답변 생성
     """
-    vector_store = get_vector_store()
+    # Chroma 벡터 스토어 초기화
+    vectorstore = Chroma(
+        collection_name=ChromaDB.COLLECTION_NAME.value,
+        embedding_function=OpenAIEmbeddings(
+            model="text-embedding-3-small"
+        ),
+        persist_directory=CHROMA_PERSIST_DIR,
+    )
     
-    # 1. 벡터 검색 (file_id로 필터)
-    vec_results = vector_store.query(request.question, top_k=5)
-    
-    # file_id(pdf_id) 필터링
+    # 1. 벡터 검색 (document_uuid로 필터)
     if request.pdf_id:
-        vec_results = [d for d in vec_results if str(d.get("id", "")).startswith(str(request.pdf_id))]
+        # 특정 문서로 필터링
+        vec_results = vectorstore.similarity_search(
+            request.question,
+            k=5,
+            filter={"document_uuid": request.pdf_id}
+        )
+    else:
+        # 전체 문서 검색
+        vec_results = vectorstore.similarity_search(request.question, k=5)
     
     if not vec_results:
         raise HTTPException(
@@ -37,7 +54,7 @@ async def chat_with_documents(request: ChatRequest) -> ChatResponse:
     
     # 2. 컨텍스트 구성
     context_parts = [
-        f"[문서 {i+1}] {doc.get('title', '문서')}\n{doc.get('content', '')}"
+        f"[문서 {i+1}] {doc.metadata.get('filename', '문서')}\n{doc.page_content}"
         for i, doc in enumerate(vec_results)
     ]
     context_text = "\n\n".join(context_parts)
@@ -57,66 +74,64 @@ async def chat_with_documents(request: ChatRequest) -> ChatResponse:
     # 5. LLM 호출
     response = chatbot_llm.invoke(messages)
     
+    # 6. 출처 정보 구성
+    sources = []
+    for i, doc in enumerate(vec_results):
+        filename = doc.metadata.get('filename', '알 수 없는 파일')
+        keywords = doc.metadata.get('keywords', '')
+        page_info = f"문서: {filename}"
+        if keywords:
+            page_info += f" (키워드: {keywords[:50]}...)" if len(keywords) > 50 else f" (키워드: {keywords})"
+        sources.append(page_info)
+    
     return ChatResponse(
         answer=response.content,
-        sources=[f"강의 자료 {i+1}번 문단" for i in range(len(vec_results))]
+        sources=sources
     )
 
-async def recommend_resources(request: RecommendRequest) -> RecommendResponse:
+async def recommend_resources(request: RecommendRequest, db: Session) -> RecommendResponse:
     """
-    벡터 DB + 웹 검색 기반 자료 추천 (MySQL 없음)
-    - PDF 내용을 자동 분석하여 핵심 키워드 추출
-    - 추출된 키워드로 Google Custom Search 실행
+    MySQL 키워드 + 웹 검색 기반 자료 추천
+    - MySQL에 저장된 키워드를 사용하여 효율적으로 검색
+    - Google Custom Search로 웹 자료 수집
     - LLM으로 구조화된 추천 생성
     """
-    vector_store = get_vector_store()
+    # 1. MySQL에서 문서 및 키워드 조회
+    document = file_crud.get_document_by_uuid(db, request.pdf_id)
     
-    # ============================================================
-    # [MySQL 통합 시 추가할 코드]
-    # PDF 존재 여부 검증 및 메타데이터 조회
-    # ============================================================
-    # from app.db.database import get_db
-    # from app.db.models import PDFDocument
-    # 
-    # db = next(get_db())
-    # pdf = db.query(PDFDocument).filter(PDFDocument.file_id == request.pdf_id).first()
-    # if not pdf:
-    #     raise HTTPException(status_code=404, detail="PDF 파일을 찾을 수 없습니다.")
-    # ============================================================
-    
-    # 1. PDF 전체 내용 샘플링 (주요 키워드 추출용)
-    vec_results = vector_store.query(
-        query="핵심 개념 주요 내용",  # 일반적인 쿼리로 대표 문서 추출
-        top_k=5, 
-        file_id=request.pdf_id
-    )
-    
-    if not vec_results:
+    if not document:
         raise HTTPException(
-            status_code=400,
-            detail="강의 자료를 찾을 수 없습니다."
+            status_code=404,
+            detail="문서를 찾을 수 없습니다."
         )
     
-    # 2. PDF 내용 요약
-    context_text = "\n\n".join([
-        f"{doc.get('content', '')[:500]}"
-        for doc in vec_results
-    ])
+    # 2. 저장된 키워드 사용
+    keywords = document.keywords if document.keywords else "학습 자료"
     
-    # 3. LLM으로 핵심 키워드 추출
-    keyword_prompt = f"""
-다음 강의 자료에서 핵심 키워드 3-5개를 추출해주세요.
-오픈소스 학습 자료를 검색할 때 사용할 키워드입니다.
-쉼표로 구분하여 키워드만 간단히 나열하세요.
-
-강의 내용:
-{context_text[:2000]}
-
-키워드 (예: 딥러닝, 신경망, RNN):
-"""
+    # 3. 벡터 DB에서 문서 내용 샘플링 (컨텍스트용)
+    vectorstore = Chroma(
+        collection_name=ChromaDB.COLLECTION_NAME.value,
+        embedding_function=OpenAIEmbeddings(
+            model="text-embedding-3-small"
+        ),
+        persist_directory=CHROMA_PERSIST_DIR,
+    )
     
-    keyword_response = chatbot_llm.invoke([{"role": "user", "content": keyword_prompt}])
-    keywords = keyword_response.content.strip()
+    vec_results = vectorstore.similarity_search(
+        "핵심 개념 주요 내용",
+        k=3, 
+        filter={"document_uuid": request.pdf_id}
+    )
+    
+    context_text = ""
+    if vec_results:
+        context_text = "\n\n".join([
+            f"{doc.page_content[:500]}"
+            for doc in vec_results
+        ])
+    else:
+        # 벡터 DB에 없으면 요약본 사용
+        context_text = document.summary[:2000] if document.summary else ""
     
     # 4. 웹 검색 (추출된 키워드 사용)
     search_results = _search_web(keywords)

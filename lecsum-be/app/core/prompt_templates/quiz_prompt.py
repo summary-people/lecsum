@@ -72,7 +72,7 @@ def get_quiz_prompt() -> ChatPromptTemplate:
         1. **multiple_choice**: 4지 선다형. 정답 1개.
         2. **true_false**: 사실 관계를 묻는 O/X 퀴즈.
         3. **short_answer**: 핵심 용어나 개념을 묻는 단답형.
-        4. **fill_in_blank**: 문맥상 들어갈 알맞은 단어를 채우는 빈칸 채우기.
+        4. **fill_in_blank**: 문맥상 핵심 용어 자리에 빈칸('_______', 언더바 7개 이상)을 포함한 문장을 생성하라. 질문 자체에 정답이 포함되어서는 안 된다.
 
         [지시사항]
         1. **내용 선정**: 강의 내용 중 학습자가 반드시 알아야 할 핵심 개념(Key Concepts) 위주로 문제를 출제해라.
@@ -113,11 +113,11 @@ def get_critic_prompt() -> ChatPromptTemplate:
       "quizzes": [
         {{
           "id": 0,
-          "type": "multiple_choice",
-          "question": "파이썬에서 리스트를 생성할 때 사용하는 기호는?",
-          "options": ["중괄호 {{}}", "소괄호 ()", "대괄호 []", "꺽쇠 <>"],
-          "correct_answer": "대괄호 []",
-          "explanation": "리스트는 대괄호 []로 선언합니다."
+          "type": "fill_in_blank",
+          "question": "자바에서 객체를 생성할 때 사용하는 키워드는 무엇인가?",
+          "options": [],
+          "correct_answer": "new",
+          "explanation": "new 키워드를 사용합니다."
         }},
         {{
           "id": 1,
@@ -157,6 +157,7 @@ def get_critic_prompt() -> ChatPromptTemplate:
 
     # 비평 내용은 그대로 유지 (오류가 있는 1, 3, 4번만 지적)
     example_mixed_critique = """
+    - **Index 0 수정 제안**: **[형식 오류]** 'fill_in_blank' 유형임에도 문제 문장에 빈칸('_______')이 없습니다. 문제를 "자바에서 객체를 생성할 때 사용하는 키워드는 _____ 이다."와 같이 빈칸을 포함한 문장 형태로 수정하십시오.
     - **Index 1 수정 제안**: 사실 관계 오류. 튜플은 '불변(Immutable)' 객체이므로 수정할 수 없다. 정답을 '소괄호를 사용한다'로 변경하고 해설을 바로잡아라.
     - **Index 3 수정 제안**: Hallucination(환각). [학습 자료]에는 'C++ Vector'에 대한 내용이 전혀 없다. 해당 문제는 삭제하거나 파이썬 딕셔너리 관련 문제로 교체하라.
     - **Index 4 수정 제안**: 사실 관계 오류. 딕셔너리의 Key는 '중복될 수 없다'. 정답을 'X'로 수정하고 해설을 'Key는 고유해야 하므로 중복될 수 없습니다'로 고쳐라.
@@ -240,6 +241,11 @@ def get_critic_prompt() -> ChatPromptTemplate:
            - 단순한 말장난 문제는 지양하라.
            - 앞의 문제와 내용이 겹치거나 똑같은 문제는 없는가?
            - 빈칸 채우기나 단답형의 정답이 너무 길거나 모호하지 않은가?
+         
+        4. **Formatting Check (형식 준수)**: 
+           - **'fill_in_blank' 유형은 반드시 문제 텍스트 내에 빈칸('_______')이 포함되어야 한다.**
+           - 빈칸 없이 의문문 형태로만 되어 있다면 반드시 수정을 지시하라.
+           - 'short_answer'와 'fill_in_blank'가 혼동되지 않았는지 확인하라.
 
         [출력 형식 가이드]
         - 수정이 필요한 문제가 있다면, 해당 문제의 **번호(Index)**와 **수정 제안(구체적인 이유와 대안)**을 글머리 기호로 명시하라.
@@ -305,11 +311,11 @@ def get_refiner_prompt() -> ChatPromptTemplate:
         }},
         {{
           "id": 3,
-          "type": "true_false",
-          "question": "세트(Set)는 데이터의 중복 저장을 허용한다.",
-          "options": ["O", "X"],
-          "correct_answer": "O",
-          "explanation": "세트는 중복을 허용하는 자료구조입니다."
+          "type": "fill_in_blank",
+          "question": "파이썬에서 순서가 없고 중복을 허용하지 않는 자료구조는 _____ 이다.",
+          "options": [],
+          "correct_answer": "리스트",
+          "explanation": "리스트는 중복 없는 자료구조입니다."
         }},
         {{
           "id": 4,
@@ -326,7 +332,7 @@ def get_refiner_prompt() -> ChatPromptTemplate:
     # 3. 비평 (Critique) - 1, 3, 4번 지적
     example_critique = """
     - **Index 1 수정 제안**: 사실 관계 오류. 튜플은 '불변(Immutable)'이므로 수정할 수 없다. 정답을 'X'로 바꾸고 해설을 '튜플은 불변 객체입니다'로 수정하라.
-    - **Index 3 수정 제안**: 사실 관계 오류. 세트(Set)는 '중복을 허용하지 않는다'. 정답을 'X'로 바꾸고 해설을 바로잡아라.
+    - **Index 3 수정 제안**: 사실 관계 오류. 리스트는 순서가 있고 중복을 허용한다. 문제에서 설명하는 '순서 없고 중복 불가'한 자료구조는 '세트'다. 정답을 '세트'로 수정하라.
     - **Index 4 수정 제안**: Hallucination(환각). [학습 자료]에 '자바' 내용은 없다. 이 문제를 삭제하고 '세트의 괄호 기호'를 묻는 문제로 교체하라.
     """
 
@@ -356,11 +362,11 @@ def get_refiner_prompt() -> ChatPromptTemplate:
           "explanation": "딕셔너리는 키-값 쌍으로 저장됩니다."
         }},
         {{
-          "id": 3, "type": "true_false",
-          "question": "세트(Set)는 데이터의 중복 저장을 허용한다.",
-          "options": ["O", "X"],
-          "correct_answer": "X",
-          "explanation": "세트(Set)는 중복된 값을 허용하지 않는 자료구조입니다."
+          "id": 3, "type": "fill_in_blank",
+          "question": "파이썬에서 순서가 없고 중복을 허용하지 않는 자료구조는 _____ 이다.",
+          "options": [],
+          "correct_answer": "세트",
+          "explanation": "세트는 중괄호를 사용하며 순서가 없고 중복을 허용하지 않습니다."
         }},
         {{
           "id": 4, "type": "multiple_choice",
@@ -381,7 +387,7 @@ def get_refiner_prompt() -> ChatPromptTemplate:
         [필수 지시사항]
         1. **지적된 문제 수정**: [비평]에서 구체적으로 지적한 문제(Index)를 찾아 올바르게 수정하라.
         2. **해설 동기화**: 정답을 변경할 경우, 반드시 **해설(Explanation)**도 변경된 정답에 맞게 논리적으로 다시 작성하라.
-        3. **보존 원칙**: 비평에서 언급되지 않은(문제가 없는) 퀴즈는 절대 내용을 변경하지 말고 그대로 유지하라.
+        3. **보존 원칙**: 비평에서 언급되지 않은(문제가 없는) 퀴즈는 절대 내용을 변경하지 말고 그대로 유지하라.        
         """),
 
         # Few-shot

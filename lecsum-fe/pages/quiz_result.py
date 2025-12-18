@@ -65,7 +65,7 @@ if st.session_state.get("selected_pdf_id"):
                     
                     with btn_col:
                         st.write("") # 간격 조정
-                        if st.button("📊 결과 보기", key=f"btn_{qs_id}"):
+                        if st.button("📊 응시 기록 확인", key=f"btn_{qs_id}"):
                             with st.spinner("기록 조회 중..."):
                                 attempt_res = api_client.get_quiz_attempts(qs_id)
                                 st.session_state.loaded_attempts[qs_id] = attempt_res.get("data", [])

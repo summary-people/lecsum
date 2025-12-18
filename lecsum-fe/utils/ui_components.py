@@ -55,10 +55,12 @@ def render_grade_result(grade_data):
 
 def render_sidebar():
     """공통 사이드바 렌더링 함수"""
+    if "selected_pdf_id" not in st.session_state:
+        st.session_state.selected_pdf_id = 1
     with st.sidebar:
         st.header("⚙️ 문서 설정")
         with st.container(border=True):
-            current_id = st.session_state.get("selected_pdf_id", 1)
+            current_id = st.session_state.selected_pdf_id
             
             pdf_id = st.number_input(
                 "📄 PDF ID", 
@@ -67,7 +69,7 @@ def render_sidebar():
                 step=1
             )
             
-            if st.button("문서 확정 및 불러오기", type="primary", use_container_width=True):
+            if st.button("문서 선택", type="primary", use_container_width=True):
                 st.session_state.selected_pdf_id = pdf_id
                 # 새로운 문서를 불러올 때 기존 데이터 초기화
                 st.session_state.loaded_attempts = {}

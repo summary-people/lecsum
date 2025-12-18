@@ -32,7 +32,7 @@ else:
         st.subheader("🚀 문제 생성")
         st.write("선택한 문서의 핵심 내용을 바탕으로 AI가 문제를 출제합니다.")
         
-        if st.button("✨ 새로운 퀴즈 세트 생성", use_container_width=True):
+        if st.button("✨ 새로운 퀴즈 생성", use_container_width=True):
             with st.spinner("AI가 문서를 읽고 문제를 구성하는 중입니다..."):
                 try:
                     response = api_client.generate_quiz(st.session_state.selected_pdf_id)
@@ -55,7 +55,7 @@ else:
             for i, q in enumerate(quiz_data["quizzes"]):
                 with st.container(border=True):
                     # 문제 헤더 (유형 표시)
-                    type_label = "객관식" if q['type'] == "multiple_choice" else "OX 문제" if q['type'] == "true_false" else "주관식"
+                    type_label = "객관식" if q['type'] == "multiple_choice" else "OX 문제" if q['type'] == "true_false" else "빈칸 채우기" if q['type'] == "fill_in_blank" else "주관식"
                     st.markdown(f"**Q{i+1}. {q['question']}**")
                     st.caption(f"유형: {type_label}")
 
@@ -67,7 +67,7 @@ else:
                     
                     user_answers.append(ans)
             
-            submit_button = st.form_submit_button("✅ 채점 제출하기", use_container_width=True, type="primary")
+            submit_button = st.form_submit_button("✅ 채점 제출하기", use_container_width=True, type="secondary")
 
         # --- 채점 로직 ---
         if submit_button:

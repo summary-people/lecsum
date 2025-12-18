@@ -78,7 +78,7 @@ async def generate_and_save_quiz(db: Session, request: QuizRequest) -> QuizRespo
 async def grade_quiz_set(db: Session, request: GradeRequest) -> GradeResponse:
     # 1. 퀴즈 데이터 조회
     quizzes = quiz_crud.get_quizzes_by_ids(db, request.quiz_id_list)
-    
+
     # 퀴즈 ID 순서대로 정렬 (DB 조회 시 순서가 보장되지 않을 수 있으므로)
     quiz_map = {q.id: q for q in quizzes}
     ordered_quizzes = []
@@ -101,19 +101,19 @@ async def grade_quiz_set(db: Session, request: GradeRequest) -> GradeResponse:
 
     # 3. 채점 및 해설 보강 LLM 호출
     llm_result: GradeResultList = await grade_and_enrich_pipeline(
-        formatted_block, 
-        ordered_quizzes, 
+        formatted_block,
+        ordered_quizzes,
         request.user_answer_list
     )
 
     # 4. DB 저장을 위한 데이터 준비 및 계산
     correct_count = 0
     save_data_list = []
-    
+
     for i, result in enumerate(llm_result.results):
         if result.is_correct:
             correct_count += 1
-            
+
         save_data_list.append({
             "quiz_id": ordered_quizzes[i].id,
             "user_answer": request.user_answer_list[i],
@@ -127,22 +127,98 @@ async def grade_quiz_set(db: Session, request: GradeRequest) -> GradeResponse:
     try:
         # Attempt 생성
         attempt = quiz_crud.create_attempt(db, request.quiz_set_id)
-        
+
         # 상세 결과 저장
         quiz_crud.create_quiz_results(db, attempt.id, save_data_list)
-        
+
         # 점수 업데이트
         quiz_crud.update_attempt_score(db, attempt.id, total_count, correct_count, score)
-        
+
         db.commit()
         db.refresh(attempt)
-        
+
         return GradeResponse(
             attempt_id=attempt.id,
             score=score,
             results=llm_result.results
         )
-        
+
+    except Exception as e:
+        db.rollback()
+        raise e
+
+async def grade_retry_quiz_set(db: Session, request) -> GradeResponse:
+    """
+    재시험 채점 (retry_quiz_set_id 사용)
+    기존 채점 로직과 동일하지만 Attempt 생성 시 retry_quiz_set_id를 사용
+    """
+    # 1. 퀴즈 데이터 조회
+    quizzes = quiz_crud.get_quizzes_by_ids(db, request.quiz_id_list)
+
+    # 퀴즈 ID 순서대로 정렬
+    quiz_map = {q.id: q for q in quizzes}
+    ordered_quizzes = []
+    for q_id in request.quiz_id_list:
+        if q_id not in quiz_map:
+            raise HTTPException(status_code=404, detail=f"Quiz ID {q_id} not found")
+        ordered_quizzes.append(quiz_map[q_id])
+
+    # 2. LLM 입력용 문자열 포맷팅
+    formatted_block = ""
+    for idx, (quiz, user_ans) in enumerate(zip(ordered_quizzes, request.user_answer_list)):
+        formatted_block += f"""
+        [문제 {idx + 1}]
+        - 유형: {quiz.type}
+        - 문제: {quiz.question}
+        - 실제 정답: {quiz.correct_answer}
+        - 기존 해설: {quiz.explanation}
+        - 사용자 답: {user_ans}
+        \n"""
+
+    # 3. 채점 및 해설 보강 LLM 호출
+    llm_result: GradeResultList = await grade_and_enrich_pipeline(
+        formatted_block,
+        ordered_quizzes,
+        request.user_answer_list
+    )
+
+    # 4. DB 저장을 위한 데이터 준비 및 계산
+    correct_count = 0
+    save_data_list = []
+
+    for i, result in enumerate(llm_result.results):
+        if result.is_correct:
+            correct_count += 1
+
+        save_data_list.append({
+            "quiz_id": ordered_quizzes[i].id,
+            "user_answer": request.user_answer_list[i],
+            "is_correct": result.is_correct
+        })
+
+    total_count = len(ordered_quizzes)
+    score = int((correct_count / total_count) * 100) if total_count > 0 else 0
+
+    # 5. DB 트랜잭션 처리 (재시험용 Attempt 생성)
+    try:
+        # 재시험 Attempt 생성
+        attempt = quiz_crud.create_retry_attempt(db, request.retry_quiz_set_id)
+
+        # 상세 결과 저장
+        quiz_crud.create_quiz_results(db, attempt.id, save_data_list)
+
+        # 점수 업데이트
+        quiz_crud.update_attempt_score(db, attempt.id, total_count, correct_count, score)
+
+        db.commit()
+        db.refresh(attempt)
+
+        return GradeResponse(
+            attempt_id=attempt.id,
+            score=score,
+            results=llm_result.results
+        )
+
     except Exception as e:
         db.rollback()
         raise e
@@ -262,37 +338,42 @@ def get_wrong_answer_list(db: Session, limit: int, offset: int):
 
 async def create_retry_quiz(db: Session, request: RetryQuizRequest) -> RetryQuizResponse:
     """
-    틀린 문제 기반 재시험 생성
-    각 틀린 문제당 유사한 문제 3개씩 생성
-    각 문제는 원본 PDF에 개별적으로 연결됨
+    특정 응시(Attempt)에서 틀린 문제들로 재시험 생성
+    1. attempt_id에서 틀린 문제들 자동 추출
+    2. 각 틀린 문제당 유사한 문제 3개씩 LLM 생성
+    3. 생성된 문제들을 새 QuizSet에 저장
+
+    예시: 틀린 문제 2개 → 총 6개 재시험 문제 생성
     """
-    # 틀린 문제들 조회
-    quizzes = quiz_crud.get_quizzes_by_ids(db, request.quiz_ids)
+    # 1. Attempt 조회
+    attempt = quiz_crud.get_attempt_by_id(db, request.attempt_id)
+    if not attempt:
+        raise HTTPException(status_code=404, detail="응시 기록을 찾을 수 없습니다.")
 
-    if not quizzes:
-        raise HTTPException(status_code=404, detail="문제를 찾을 수 없습니다.")
+    # 2. 해당 Attempt에서 틀린 문제들 조회
+    wrong_results = (
+        db.query(quiz_crud.QuizResult, quiz_crud.Quiz)
+        .join(quiz_crud.Quiz, quiz_crud.QuizResult.quiz_id == quiz_crud.Quiz.id)
+        .filter(quiz_crud.QuizResult.attempt_id == request.attempt_id)
+        .filter(quiz_crud.QuizResult.is_correct == False)
+        .all()
+    )
 
-    # 전체 생성된 문제 및 QuizSet ID 리스트
-    all_saved_quizzes = []
-    quiz_set_ids = []
+    if not wrong_results:
+        raise HTTPException(status_code=400, detail="틀린 문제가 없습니다. 모든 문제를 맞추셨습니다!")
 
-    # 각 틀린 문제마다 처리
-    for original_quiz in quizzes:
-        # 각 문제의 원본 PDF ID 조회
-        quiz_set = db.query(quiz_crud.QuizSet).filter(
-            quiz_crud.QuizSet.id == original_quiz.quiz_set_id
-        ).first()
+    # 3. 원본 QuizSet의 PDF ID 찾기
+    original_quiz_set = db.query(quiz_crud.QuizSet).filter(
+        quiz_crud.QuizSet.id == attempt.quiz_set_id
+    ).first()
 
-        if not quiz_set:
-            raise HTTPException(
-                status_code=404,
-                detail=f"문제 세트를 찾을 수 없습니다. (quiz_id={original_quiz.id})"
-            )
+    if not original_quiz_set:
+        raise HTTPException(status_code=404, detail="원본 퀴즈 세트를 찾을 수 없습니다.")
 
-        # 해당 PDF에 대한 새 QuizSet 생성
-        new_quiz_set = quiz_crud.create_quiz_set(db, quiz_set.pdf_id)
-        quiz_set_ids.append(new_quiz_set.id)
+    # 4. 각 틀린 문제당 유사 문제 3개씩 생성
+    all_generated_quizzes = []
 
+    for _, original_quiz in wrong_results:
         # 원본 문제 정보를 문자열로 포맷팅
         original_quiz_info = f"""
 문제 유형: {original_quiz.type}
@@ -303,24 +384,56 @@ async def create_retry_quiz(db: Session, request: RetryQuizRequest) -> RetryQuiz
         """
 
         # LLM 호출하여 유사 문제 3개 생성
-        retry_result: QuizResponse = await retry_quiz_chain.ainvoke({
+        retry_result: QuizGenerationOutput = await retry_quiz_chain.ainvoke({
             "original_quiz": original_quiz_info
         })
 
-        # 생성된 문제가 3개가 아니면 에러
+        # 생성된 문제가 3개가 아니면 경고 (하지만 계속 진행)
         if len(retry_result.quizzes) != 3:
-            raise HTTPException(
-                status_code=500,
-                detail=f"문제 생성 오류: {len(retry_result.quizzes)}개 생성됨 (예상: 3개)"
-            )
+            print(f"⚠️ 경고: {len(retry_result.quizzes)}개 생성됨 (예상: 3개)")
 
-        # 생성된 문제들을 해당 QuizSet에 저장
-        saved_quizzes = quiz_crud.create_quiz_list(db, new_quiz_set.id, retry_result.quizzes)
-        all_saved_quizzes.extend(saved_quizzes)
+        # 생성된 문제들을 리스트에 추가
+        all_generated_quizzes.extend(retry_result.quizzes)
 
-    # 응답 구성
+    # 5. 새로운 QuizSet 생성 (재시험용)
+    new_quiz_set = quiz_crud.create_quiz_set(db, original_quiz_set.pdf_id)
+
+    # 생성된 문제들 저장
+    saved_quizzes = quiz_crud.create_quiz_list(db, new_quiz_set.id, all_generated_quizzes)
+
+    # 6. RetryQuizSet 생성 및 연결
+    from app.models.quiz import RetryQuizSet, RetryQuizItem
+
+    retry_quiz_set = RetryQuizSet(
+        original_attempt_id=request.attempt_id,
+        quiz_set_id=new_quiz_set.id  # 생성된 QuizSet 연결
+    )
+    db.add(retry_quiz_set)
+    db.flush()  # ID 생성
+
+    # 7. RetryQuizItem으로 원본 Quiz와 생성된 Quiz 연결 정보 저장
+    retry_items = []
+    saved_quiz_idx = 0
+
+    for _, original_quiz in wrong_results:
+        # 이 원본 문제에서 생성된 3개 문제
+        for _ in range(3):
+            if saved_quiz_idx < len(saved_quizzes):
+                retry_item = RetryQuizItem(
+                    retry_quiz_set_id=retry_quiz_set.id,
+                    original_quiz_id=original_quiz.id,  # 원본 문제 참조
+                    order=saved_quiz_idx + 1
+                )
+                retry_items.append(retry_item)
+                saved_quiz_idx += 1
+
+    db.add_all(retry_items)
+    db.commit()
+    db.refresh(retry_quiz_set)
+
+    # 8. 응답 구성 (생성된 Quiz 정보 반환)
     response_items = []
-    for q in all_saved_quizzes:
+    for q in saved_quizzes:
         response_items.append(QuizItem(
             id=q.id,
             question=q.question,
@@ -331,7 +444,55 @@ async def create_retry_quiz(db: Session, request: RetryQuizRequest) -> RetryQuiz
         ))
 
     return RetryQuizResponse(
-        quiz_set_ids=quiz_set_ids,  # 여러 QuizSet ID 반환
+        retry_quiz_set_id=retry_quiz_set.id,
         total_questions=len(response_items),
         quizzes=response_items
+    )
+
+def get_attempt_list(db: Session, quiz_set_id: int = None, limit: int = 50, offset: int = 0):
+    """
+    응시 기록 목록 조회
+    quiz_set_id가 주어지면 해당 퀴즈 세트의 응시 기록만 조회
+    없으면 전체 응시 기록 조회
+    """
+    attempts = quiz_crud.get_attempts(db, quiz_set_id, limit, offset)
+
+    if not attempts:
+        return []
+
+    return [AttemptDto.model_validate(attempt) for attempt in attempts]
+
+def get_attempt_detail(db: Session, attempt_id: int):
+    """
+    응시 기록 상세 조회 (문제별 결과 포함)
+    """
+    attempt = quiz_crud.get_attempt_by_id(db, attempt_id)
+
+    if not attempt:
+        raise HTTPException(status_code=404, detail="응시 기록을 찾을 수 없습니다.")
+
+    # QuizResult와 Quiz 정보를 함께 조회
+    results_with_quiz = quiz_crud.get_quiz_results_with_quiz(db, attempt_id)
+
+    # QuizResultDto로 변환
+    result_dtos = []
+    for result, quiz in results_with_quiz:
+        result_dtos.append(QuizResultDto(
+            id=result.id,
+            quiz_id=result.quiz_id,
+            user_answer=result.user_answer,
+            is_correct=result.is_correct,
+            question=quiz.question,
+            correct_answer=quiz.correct_answer
+        ))
+
+    return AttemptDetailDto(
+        id=attempt.id,
+        quiz_set_id=attempt.quiz_set_id,
+        retry_quiz_set_id=attempt.retry_quiz_set_id,
+        score=attempt.score,
+        quiz_count=attempt.quiz_count,
+        correct_count=attempt.correct_count,
+        created_at=attempt.created_at,
+        results=result_dtos
     )

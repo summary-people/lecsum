@@ -37,9 +37,22 @@ def get_quizzes_by_ids(db: Session, quiz_ids: List[int]) -> List[Quiz]:
 
 # 응시 기록(Attempt) 생성
 def create_attempt(db: Session, quiz_set_id: int) -> Attempt:
-    
+
     attempt = Attempt(
         quiz_set_id=quiz_set_id,
+        score=0,
+        quiz_count=0,
+        correct_count=0
+    )
+    db.add(attempt)
+    db.flush()  # ID 생성을 위해 flush
+    return attempt
+
+# 재시험 응시 기록(Attempt) 생성
+def create_retry_attempt(db: Session, retry_quiz_set_id: int) -> Attempt:
+
+    attempt = Attempt(
+        retry_quiz_set_id=retry_quiz_set_id,
         score=0,
         quiz_count=0,
         correct_count=0
@@ -110,5 +123,44 @@ def get_wrong_answers(db: Session, limit: int, offset: int):
         .order_by(QuizResult.created_at.desc())
         .limit(limit)
         .offset(offset)
+        .all()
+    )
+
+# 응시 기록 목록 조회
+def get_attempts(db: Session, quiz_set_id: int = None, limit: int = 50, offset: int = 0):
+    """
+    응시 기록 목록 조회
+    quiz_set_id가 있으면 해당 퀴즈 세트의 응시 기록만 조회
+    """
+    query = db.query(Attempt)
+
+    if quiz_set_id:
+        query = query.filter(Attempt.quiz_set_id == quiz_set_id)
+
+    return (
+        query
+        .order_by(Attempt.created_at.desc())
+        .limit(limit)
+        .offset(offset)
+        .all()
+    )
+
+# 응시 기록 단건 조회
+def get_attempt_by_id(db: Session, attempt_id: int):
+    """
+    응시 기록 ID로 조회
+    """
+    return db.query(Attempt).filter(Attempt.id == attempt_id).first()
+
+# 응시 기록의 문제별 결과 조회 (Quiz 정보 포함)
+def get_quiz_results_with_quiz(db: Session, attempt_id: int):
+    """
+    특정 응시 기록의 문제별 결과와 Quiz 정보를 함께 조회
+    """
+    return (
+        db.query(QuizResult, Quiz)
+        .join(Quiz, QuizResult.quiz_id == Quiz.id)
+        .filter(QuizResult.attempt_id == attempt_id)
+        .order_by(QuizResult.id)
         .all()
     )

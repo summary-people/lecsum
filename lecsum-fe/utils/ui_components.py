@@ -38,7 +38,6 @@ def render_grade_result(grade_data):
         is_correct = detail.get("is_correct", False)
         label = "✅ 정답" if is_correct else "❌ 오답"
         
-        # Expander의 테두리 색상은 직접 바꿀 수 없으므로, 내부 컨텐츠에 색상 적용
         with st.expander(f"문제 {i+1} : {label}", expanded=not is_correct):            
 
             # AI 피드백
@@ -48,8 +47,33 @@ def render_grade_result(grade_data):
             else:
                 st.error(detail["feedback"])
 
-    # 다시 시도 버튼 등 추가 액션 제안
+    # 다시 시도 버튼
     if st.button("🔄 처음부터 다시 풀기", use_container_width=True):
         st.session_state.grade_result = None
         st.session_state.current_quiz = None
         st.rerun()
+
+def render_sidebar():
+    """공통 사이드바 렌더링 함수"""
+    with st.sidebar:
+        st.header("⚙️ 문서 설정")
+        with st.container(border=True):
+            current_id = st.session_state.get("selected_pdf_id", 1)
+            
+            pdf_id = st.number_input(
+                "📄 PDF ID", 
+                min_value=1, 
+                value=current_id,
+                step=1
+            )
+            
+            if st.button("문서 확정 및 불러오기", type="primary", use_container_width=True):
+                st.session_state.selected_pdf_id = pdf_id
+                # 새로운 문서를 불러올 때 기존 데이터 초기화
+                st.session_state.loaded_attempts = {}
+                st.session_state.current_quiz = None
+                st.session_state.grade_result = None
+                st.rerun()
+        
+        if st.session_state.get("selected_pdf_id"):
+            st.success(f"현재 선택된 문서: **{st.session_state.selected_pdf_id}번**")

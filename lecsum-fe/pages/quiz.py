@@ -1,9 +1,10 @@
 import streamlit as st
 from services.api_client import APIClient
-from utils.ui_components import render_header, render_grade_result
+from utils.ui_components import render_header, render_grade_result, render_sidebar
 
 # 1. 페이지 설정 및 초기화
-st.set_page_config(page_title="AI 모의고사", page_icon="📝", layout="wide")
+st.set_page_config(page_title="AI 퀴즈", page_icon="📝", layout="wide")
+render_sidebar()
 api_client = APIClient()
 
 def init_session_state():
@@ -18,26 +19,7 @@ def init_session_state():
 init_session_state()
 
 # UI: 헤더
-render_header("📝 AI 모의고사", "강의 자료를 분석하여 맞춤형 문제를 생성합니다.")
-
-# 2. 사이드바: 설정 및 정보
-with st.sidebar:
-    st.header("⚙️ 설정")
-    with st.container(border=True):
-        pdf_id = st.number_input(
-            "📄 분석할 PDF ID", 
-            min_value=1, 
-            value=st.session_state.selected_pdf_id or 1, 
-            step=1
-        )
-        if st.button("문서 확정", use_container_width=True, type="primary"):
-            st.session_state.selected_pdf_id = pdf_id
-            st.session_state.current_quiz = None
-            st.session_state.grade_result = None
-            st.toast(f"{pdf_id}번 문서가 로드되었습니다!", icon="✅")
-
-    if st.session_state.selected_pdf_id:
-        st.info(f"현재 선택된 문서: **{st.session_state.selected_pdf_id}번**")
+render_header("📝 AI 퀴즈", "강의 자료를 분석하여 맞춤형 문제를 생성합니다.")
 
 # 3. 메인 화면 로직
 if not st.session_state.selected_pdf_id:
@@ -66,7 +48,7 @@ else:
         st.divider()
         st.subheader(f"📝 퀴즈 세트: #{quiz_data['quiz_set_id']}")
 
-        # st.form을 사용하여 입력 시마다 새로고침 방지
+
         with st.form(key="quiz_form"):
             user_answers = []
             

@@ -56,3 +56,9 @@ class APIClient:
         """퀴즈 세트 삭제"""
         response = requests.delete(f"{self.base_url}/api/quizzes/quiz-sets/{quiz_set_id}")
         return response.status_code == 200
+    
+    def get_quiz_attempts(self, quiz_set_id: int) -> Dict[str, Any]:
+        """특정 퀴즈 세트의 응시 기록 목록 조회"""
+        response = requests.get(f"{self.base_url}/api/quizzes/quiz-sets/{quiz_set_id}/attempts")
+        response.raise_for_status()
+        return response.json()

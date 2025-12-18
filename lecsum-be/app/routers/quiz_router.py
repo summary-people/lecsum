@@ -11,6 +11,7 @@ from app.db.quiz_schemas import (
     WrongAnswerItem,
     RetryQuizRequest,
     RetryQuizResponse,
+    AttemptDetailDto
 )
 from app.db.schemas import CommonResponse
 from app.db.database import get_db
@@ -379,3 +380,91 @@ async def create_retry_quiz(
         message="재시험이 생성되었습니다.",
         data=result
     )
+
+@router.get(
+    "/quiz-sets/{quiz_set_id}/attempts",
+    # 여러 개의 응시 기록이 나올 수 있으므로 List로 감쌉니다.
+    response_model=CommonResponse[List[AttemptDetailDto]], 
+    summary="퀴즈 세트별 응시 기록 목록 조회",
+    description="""
+특정 퀴즈 세트(quiz_set_id)에 대한 사용자의 모든 응시 기록과 상세 결과를 조회합니다.
+
+### 처리 내용
+1. quiz_set_id에 해당하는 모든 Attempt 레코드 조회
+2. 각 응시 기록별 점수, 정답 개수 및 상세 답안(Results) 로딩
+3. 최신 응시일 순으로 정렬하여 반환
+    """,
+    responses={
+        200: {
+            "description": "조회 성공",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "success": True,
+                        "data": [
+                            {
+                                "id": 1,
+                                "quiz_set_id": 10,
+                                "score": 100,
+                                "quiz_count": 5,
+                                "correct_count": 5,
+                                "created_at": "2024-05-21T10:00:00",
+                                "results": [
+                                    {
+                                        "id": 6,
+                                        "quiz_id": 1,
+                                        "user_answer": "자율주행차",
+                                        "is_correct": False,
+                                        "quiz": {
+                                            "id": 1,
+                                            "number": 1,
+                                            "type": "multiple_choice",
+                                            "question": "다음 중 인공지능의 응용 기술에 해당하지 않는 것은?",
+                                            "options": [
+                                                "자율주행차",
+                                                "음성 인식",
+                                                "이미지 처리",
+                                                "웹 브라우저"
+                                            ]
+                                        }
+                                    },
+                                ]
+                            },
+                            {
+                                "id": 2,
+                                "quiz_set_id": 10,
+                                "score": 60,
+                                "quiz_count": 5,
+                                "correct_count": 3,
+                                "created_at": "2024-05-20T14:30:00",
+                                "results": [
+                                    {
+                                        "id": 6,
+                                        "quiz_id": 1,
+                                        "user_answer": "자율주행차",
+                                        "is_correct": False,
+                                        "quiz": {
+                                            "id": 1,
+                                            "number": 1,
+                                            "type": "multiple_choice",
+                                            "question": "다음 중 인공지능의 응용 기술에 해당하지 않는 것은?",
+                                            "options": [
+                                                "자율주행차",
+                                                "음성 인식",
+                                                "이미지 처리",
+                                                "웹 브라우저"
+                                            ]
+                                        }
+                                    },
+                                ]
+                            }
+                        ]
+                    }
+                }
+            }
+        }
+    }
+)
+async def get_quiz_set_attempts(quiz_set_id: int, db: Session = Depends(get_db)):
+    result = quiz_service.get_quiz_set_attempt_history(db, quiz_set_id)
+    return CommonResponse(data=result)

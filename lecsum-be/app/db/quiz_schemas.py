@@ -85,3 +85,28 @@ class RetryQuizResponse(BaseModel):
     quiz_set_ids: List[int] = Field(description="생성된 퀴즈 세트 ID 리스트 (각 문제가 원본 PDF에 연결)")
     total_questions: int
     quizzes: List[QuizItem]
+
+# 응시기록 조회 DTO
+# [Request] 상세 채점 결과 DTO
+class QuizResultDto(BaseModel):
+    id: int
+    quiz_id: int
+    user_answer: Optional[str]
+    is_correct: bool
+    quiz: QuizDto  # 연관된 문제 정보 포함
+
+    class Config:
+        from_attributes = True
+
+# [Response] 응시 기록 상세 DTO (결과 리스트 포함)
+class AttemptDetailDto(BaseModel):
+    id: int
+    quiz_set_id: int
+    score: int
+    quiz_count: int
+    correct_count: int
+    created_at: datetime
+    results: List[QuizResultDto] = []
+
+    class Config:
+        from_attributes = True

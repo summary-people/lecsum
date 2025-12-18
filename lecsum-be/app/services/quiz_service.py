@@ -335,3 +335,10 @@ async def create_retry_quiz(db: Session, request: RetryQuizRequest) -> RetryQuiz
         total_questions=len(response_items),
         quizzes=response_items
     )
+
+# 응시기록 조회
+def get_quiz_set_attempt_history(db: Session, quiz_set_id: int):
+    attempts = quiz_crud.get_attempts_by_quiz_set(db, quiz_set_id)
+    if not attempts:
+         return []
+    return attempts

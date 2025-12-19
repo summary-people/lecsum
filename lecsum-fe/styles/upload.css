@@ -1,0 +1,34 @@
+/* 업로드 전체 영역 */
+[data-testid="stFileUploader"] {
+  border: 3px dashed #c4b5fd;
+  border-radius: 24px;
+  padding: 80px 40px;
+  background: white;
+  text-align: center;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.08);
+  position: relative;
+}
+
+/* 숨김 label 제거 */
+[data-testid="stFileUploader"] label {
+  display: none;
+}
+
+/* input 전체 덮기 */
+[data-testid="stFileUploader"] input[type="file"] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+  z-index: 10;
+}
+
+[data-testid="stFileUploader"]::after {
+  content: "버튼을 클릭하여 파일을 업로드하세요 (PDF, PPT)";
+  display: block;
+  font-size: 20px;
+  font-weight: 700;
+  color: #7c3aed;
+}

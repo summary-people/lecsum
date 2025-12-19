@@ -10,31 +10,31 @@ st.markdown("업로드한 강의 자료를 바탕으로 질문하고 답변을 �
 # 세션 상태 초기화
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
-if "selected_pdf_id" not in st.session_state:
-    st.session_state.selected_pdf_id = None
-if "selected_pdf_name" not in st.session_state:
-    st.session_state.selected_pdf_name = None
+if "selected_document_id" not in st.session_state:
+    st.session_state.selected_document_id = None
+if "selected_document_name" not in st.session_state:
+    st.session_state.selected_document_name = None
 
-# 사이드바: PDF 선택
+# 사이드바: Document 선택
 with st.sidebar:
     st.header("📄 문서 선택")
     
-    # PDF ID 입력 (임시로 직접 입력 방식)
-    pdf_id = st.number_input("PDF ID", min_value=1, value=1, step=1)
+    # Document ID 입력 (임시로 직접 입력 방식)
+    document_id = st.number_input("Document ID", min_value=1, value=1, step=1)
     
     if st.button("문서 선택"):
-        st.session_state.selected_pdf_id = pdf_id
+        st.session_state.selected_document_id = document_id
         st.session_state.chat_history = []
     
-    if st.session_state.selected_pdf_id:
-        st.info(f"현재 문서 ID: {st.session_state.selected_pdf_id}")
+    if st.session_state.selected_document_id:
+        st.info(f"현재 문서 ID: {st.session_state.selected_document_id}")
         
         # 관련 자료 보기 버튼
-        if st.button(f"📚 pdf: {st.session_state.selected_pdf_id}번의 관련 자료 보기", use_container_width=True):
+        if st.button(f"📚 document: {st.session_state.selected_document_id}번의 관련 자료 보기", use_container_width=True):
             with st.spinner("자료 검색 중..."):
                 try:
                     response = api_client.recommend_resources(
-                        pdf_id=st.session_state.selected_pdf_id
+                        document_id=st.session_state.selected_document_id
                     )
                     
                     data = response.get("data", {})
@@ -54,7 +54,7 @@ with st.sidebar:
                         recommend_content += "관련 자료를 찾지 못했습니다."
                     
                     st.session_state.chat_history.append({
-                        "question": f"pdf: {st.session_state.selected_pdf_id}번의 관련 자료 보기",
+                        "question": f"document: {st.session_state.selected_document_id}번의 관련 자료 보기",
                         "answer": recommend_content,
                         "sources": [],
                         "is_recommendation": True
@@ -70,7 +70,7 @@ with st.sidebar:
         st.rerun()
 
 # 메인 영역: 채팅
-if not st.session_state.selected_pdf_id:
+if not st.session_state.selected_document_id:
     st.warning("⚠️ 왼쪽 사이드바에서 문서를 먼저 선택해주세요.")
 else:
     # 대화 기록 표시
@@ -114,7 +114,7 @@ else:
                         chat_history.append({"role": "assistant", "content": chat["answer"]})
                     
                     response = api_client.chat(
-                        pdf_id=st.session_state.selected_pdf_id,
+                        document_id=st.session_state.selected_document_id,
                         question=question,
                         chat_history=chat_history
                     )

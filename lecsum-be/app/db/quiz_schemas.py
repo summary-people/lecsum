@@ -4,7 +4,7 @@ from typing import List, Literal, Optional
 from datetime import datetime
 
 class QuizRequest(BaseModel):
-    pdf_id: int
+    document_id: int
 
 # 퀴즈 하나의 구조
 class QuizItem(BaseModel):
@@ -65,7 +65,7 @@ class QuizDto(BaseModel):
 # QuizSet (문제지) DTO
 class QuizSetDto(BaseModel):
     id: int
-    pdf_id: int
+    document_id: int
     created_at: datetime
     quizs: List[QuizDto] = [] 
 
@@ -81,7 +81,7 @@ class WrongAnswerItem(BaseModel):
     explanation: str
     user_answer: str          # 내가 틀린 답
     attempt_id: int           # 어느 시험에서 틀렸는지 (응시 기록)
-    pdf_name: Optional[str] = None  # 원본 PDF 파일명
+    document_name: Optional[str] = None  # 원본 PDF 파일명
 
 # [Request] 오답 재시험 생성 요청
 class RetryQuizRequest(BaseModel):

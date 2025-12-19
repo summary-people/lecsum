@@ -4,7 +4,7 @@ from typing import List, Optional
 
 # 챗봇 질문 요청 (Chroma 기반, pdf_id는 MySQL 문서 id)
 class ChatRequest(BaseModel):
-    pdf_id: Optional[int] = Field(default=None, description="PDF 문서 ID (MySQL id, 없으면 전체 검색)")
+    document_id: Optional[int] = Field(default=None, description="PDF 문서 ID (MySQL id, 없으면 전체 검색)")
     question: str = Field(description="사용자의 질문")
     chat_history: Optional[List[dict]] = Field(
         default=[],
@@ -27,7 +27,7 @@ class ChatResponse(BaseModel):
 
 # 오픈소스 자료 추천 요청 (MySQL 기반, pdf_id는 MySQL 문서 id)
 class RecommendRequest(BaseModel):
-    pdf_id: int = Field(description="PDF 문서 ID (MySQL id, 해당 PDF 내용을 분석하여 자동으로 관련 자료 추천)")
+    document_id: int = Field(description="PDF 문서 ID (MySQL id, 해당 PDF 내용을 분석하여 자동으로 관련 자료 추천)")
 
 # 추천 자료 아이템
 class RecommendItem(BaseModel):

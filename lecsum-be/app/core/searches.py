@@ -2,7 +2,7 @@ import os
 import asyncio
 from dotenv import load_dotenv
 from langchain_core.tools import Tool
-from langchain_community.utilities import GoogleSearchAPIWrapper
+from langchain_google_community import GoogleSearchAPIWrapper
 
 load_dotenv()
 

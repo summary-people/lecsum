@@ -33,7 +33,7 @@ router = APIRouter(
 PDF 문서를 기반으로 모의고사 문제를 자동 생성합니다.
 
 ### 처리 절차
-1. PDF 식별자(pdf_id) 입력
+1. PDF 식별자(document_id) 입력
 2. VectorDB(ChromaDB)에서 관련 문서 검색 (RAG)
 3. LLM을 이용해 문제 자동 생성
    - 빈칸 채우기 / 단어 맞추기 유형
@@ -100,7 +100,7 @@ async def generate_quiz(
     db: Session = Depends(get_db),
 ):
     """
-    pdf_id를 받아 퀴즈를 생성하고 DB에 저장 후 반환합니다.
+    document_id를 받아 퀴즈를 생성하고 DB에 저장 후 반환합니다.
     """
     result = await quiz_service.generate_and_save_quiz(db, request)
     return CommonResponse(data=result)
@@ -193,10 +193,10 @@ async def grade_quiz(
     response_model=CommonResponse[List[QuizSetDto]],
     summary="파일별 퀴즈 세트 목록 조회",
     description="""
-특정 파일(pdf_id)에 연관된 모든 퀴즈 세트(문제지) 목록을 조회합니다.
+특정 파일(document_id)에 연관된 모든 퀴즈 세트(문제지) 목록을 조회합니다.
 
 ### 처리 내용
-1. 요청받은 pdf_id로 생성된 퀴즈 세트를 DB에서 조회
+1. 요청받은 document_id로 생성된 퀴즈 세트를 DB에서 조회
 2. 각 퀴즈 세트에 포함된 문제(Quiz) 정보도 함께 로딩
 3. 생성일자 기준 내림차순 정렬하여 반환
 
@@ -215,7 +215,7 @@ async def grade_quiz(
                         "data": [
                             {
                                 "id": 10,
-                                "pdf_id": 3,
+                                "document_id": 3,
                                 "created_at": "2024-05-20T14:30:00",
                                 "quizs": [
                                     {"id": 101, "question": "문제 1번..."},
@@ -224,7 +224,7 @@ async def grade_quiz(
                             },
                             {
                                 "id": 5,
-                                "pdf_id": 3,
+                                "document_id": 3,
                                 "created_at": "2024-05-19T09:00:00",
                                 "quizs": []
                             }
@@ -260,11 +260,11 @@ async def grade_quiz(
         }
     }
 )
-async def get_quiz_list(pdf_id: int, db: Session = Depends(get_db)):
+async def get_quiz_list(document_id: int, db: Session = Depends(get_db)):
     """
     특정 파일에 생성된 퀴즈 세트 목록 조회
     """
-    result = quiz_service.get_quiz_sets(db, pdf_id)
+    result = quiz_service.get_quiz_sets(db, document_id)
     
     return CommonResponse(        
         data=result

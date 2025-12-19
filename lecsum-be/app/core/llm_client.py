@@ -12,6 +12,7 @@ from app.core.prompt_templates.keyword_prompt import get_keyword_prompt
 from app.core.prompt_templates.quiz_prompt import (get_quiz_prompt, get_grading_prompt)
 from app.core.prompt_templates.retry_quiz_prompt import get_retry_quiz_prompt
 from app.db.quiz_schemas import QuizResponse, GradeResultList
+from langchain_core.output_parsers import JsonOutputParser
 
 # 환경변수 로드
 load_dotenv()
@@ -34,8 +35,24 @@ chatbot_llm = ChatOpenAI(
 # -----------------------------
 # 자유 텍스트 출력 체인
 # -----------------------------
+def route_summary_prompt(inputs: dict):
+    """
+    summary_type에 따라 요약 프롬프트를 분기한다.
+    inputs = {
+        "context": str,
+        "summary_type": str
+    }
+    """
+    summary_type = inputs.get("summary_type", "lecture")
+    return {
+        "context": inputs["context"],
+        "prompt": get_summary_prompt(summary_type)
+    }
+
 summary_chain: Runnable = (
-    get_summary_prompt()
+    RunnableLambda(route_summary_prompt)
+    | RunnablePassthrough.assign(context=lambda x: x["context"])
+    | (lambda x: x["prompt"])
     | chatOpenAI
     | StrOutputParser()
 )
@@ -135,4 +152,15 @@ retry_quiz_chain: Runnable = build_structured_chain(
     chatOpenAI,
     get_retry_quiz_prompt(),
     QuizResponse, # 퀴즈 생성과 동일한 방식으로 재시험 생성
+)
+
+top_sentence_chain: Runnable = (
+    ChatPromptTemplate.from_template("""
+    다음 문서에서 가장 중요한 문장 {k}개를 추출하라.
+    JSON 배열로 반환하라.
+
+    {context}
+    """)
+    | chatOpenAI
+    | JsonOutputParser()
 )

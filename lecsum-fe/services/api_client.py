@@ -6,17 +6,10 @@ class APIClient:
         self.base_url = base_url
     
 
-<<<<<<< HEAD
-    def chat(self, pdf_id: int, question: str, chat_history: Optional[List[Dict[str, str]]] = None) -> Dict[str, Any]:
-        """챗봇 질문하기"""
-        payload = {
-            "pdf_id": pdf_id,
-=======
     def chat(self, document_id: int, question: str, chat_history: Optional[List[Dict[str, str]]] = None) -> Dict[str, Any]:
         """챗봇 질문하기"""
         payload = {
             "document_id": document_id,
->>>>>>> main
             "question": question,
             "chat_history": chat_history or []
         }
@@ -24,27 +17,19 @@ class APIClient:
         response.raise_for_status()
         return response.json()
     
-<<<<<<< HEAD
-    def recommend_resources(self, pdf_id: int) -> Dict[str, Any]:
-        """자료 추천받기"""
-        payload = {
-            "pdf_id": pdf_id
-=======
     def recommend_resources(self, document_id: int) -> Dict[str, Any]:
         """자료 추천받기"""
         payload = {
             "document_id": document_id
->>>>>>> main
         }
         response = requests.post(f"{self.base_url}/api/chatbot/recommend", json=payload)
         response.raise_for_status()
         return response.json()
-<<<<<<< HEAD
     
     # Quiz
-    def generate_quiz(self, pdf_id: int) -> Dict[str, Any]:
+    def generate_quiz(self, document_id: int) -> Dict[str, Any]:
         """퀴즈 생성하기"""
-        payload = {"pdf_id": pdf_id, "query": "핵심 내용"}
+        payload = {"document_id": document_id, "query": "핵심 내용"}
         response = requests.post(f"{self.base_url}/api/quizzes/generate", json=payload)
         response.raise_for_status()
         return response.json()
@@ -60,23 +45,26 @@ class APIClient:
         response.raise_for_status()
         return response.json()
 
-    def get_quiz_sets(self, pdf_id: int) -> Dict[str, Any]:
+    def get_quiz_sets(self, document_id: int) -> Dict[str, Any]:
         """퀴즈 목록 불러오기"""
-        params = {"pdf_id": pdf_id}
+        params = {"document_id": document_id}
         response = requests.get(f"{self.base_url}/api/quizzes/quiz-sets", params=params)
         response.raise_for_status()
         return response.json()
 
-    def delete_quiz_set(self, quiz_set_id: int) -> bool:
-        """퀴즈 세트 삭제"""
-        response = requests.delete(f"{self.base_url}/api/quizzes/quiz-sets/{quiz_set_id}")
-        return response.status_code == 200
-    
-    def get_quiz_attempts(self, quiz_set_id: int) -> Dict[str, Any]:
-        """특정 퀴즈 세트의 응시 기록 목록 조회"""
-        response = requests.get(f"{self.base_url}/api/quizzes/quiz-sets/{quiz_set_id}/attempts")
+    def get_attempts(self, quiz_set_id: Optional[int] = None, limit: int = 10, offset: int = 0) -> Dict[str, Any]:
+        """응시 기록 목록 조회"""
+        params = {
+            "quiz_set_id": quiz_set_id,
+            "limit": limit,
+            "offset": offset
+        }
+        response = requests.get(f"{self.base_url}/api/quizzes/attempts", params=params)
         response.raise_for_status()
         return response.json()
-=======
- 
->>>>>>> main
+
+    def get_attempt_detail(self, attempt_id: int) -> Dict[str, Any]:
+        """응시 기록 상세 조회 (문제별 결과 포함)"""
+        response = requests.get(f"{self.base_url}/api/quizzes/attempts/{attempt_id}")
+        response.raise_for_status()
+        return response.json()

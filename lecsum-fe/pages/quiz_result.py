@@ -33,15 +33,17 @@ st.markdown("""
 # 세션 상태 초기화
 if "loaded_attempts" not in st.session_state:
     st.session_state.loaded_attempts = {}
+if "attempt_details" not in st.session_state:
+    st.session_state.attempt_details = {}
 
 st.title("🗄️ 퀴즈 보관함")
 st.markdown("과거에 생성한 퀴즈와 응시 기록을 한눈에 확인하세요.")
 
 
 # --- 메인 로직 ---
-if st.session_state.get("selected_pdf_id"):
+if st.session_state.get("selected_document_id"):
     try:
-        response = api_client.get_quiz_sets(st.session_state.selected_pdf_id)
+        response = api_client.get_quiz_sets(st.session_state.selected_document_id)
         quiz_sets = response.get("data", [])
 
         if not quiz_sets:
@@ -66,9 +68,9 @@ if st.session_state.get("selected_pdf_id"):
                     with btn_col:
                         st.write("") # 간격 조정
                         if st.button("📊 응시 기록 확인", key=f"btn_{qs_id}"):
-                            with st.spinner("기록 조회 중..."):
-                                attempt_res = api_client.get_quiz_attempts(qs_id)
-                                st.session_state.loaded_attempts[qs_id] = attempt_res.get("data", [])
+                            with st.spinner("목록 조회 중..."):
+                                att_res = api_client.get_attempts(quiz_set_id=qs_id, limit=10, offset=0)
+                                st.session_state.loaded_attempts[qs_id] = att_res.get("data", [])
 
                     # 퀴즈 문항 내용 표시 (Expander)
                     with st.expander("📝 문제 내용 확인", expanded=False):
@@ -124,27 +126,39 @@ if st.session_state.get("selected_pdf_id"):
                             
                             
                             for att in attempts:
+                                att_id = att['id']
                                 score = att['score']
-                                # 점수에 따른 색상 및 이모지 결정
-                                if score >= 80:
-                                    status_icon, color = "🌟", "green"
-                                elif score >= 50:
-                                    status_icon, color = "⚡", "orange"
-                                else:
-                                    status_icon, color = "💡", "red"
+                                color = "green" if score >= 80 else "orange" if score >= 50 else "red"
                                 
-                                with st.expander(f"{status_icon} {att['created_at']} — 점수: :{color}[{score}점]"):
-                                    # 메트릭으로 요약 정보 표시
-                                    m1, m2, m3 = st.columns(3)
-                                    m1.metric("최종 점수", f"{score}점")
-                                    m2.metric("정답 수", f"{sum(1 for r in att.get('results', []) if r['is_correct'])}개")
-                                    m3.metric("오답 수", f"{sum(1 for r in att.get('results', []) if not r['is_correct'])}개")
-                                    
-                                    st.markdown("---")
-                                    for res in att.get("results", []):
-                                        icon = "✅" if res['is_correct'] else "❌"
-                                        st.write(f"{icon} **Q{res['quiz']['number']}.** {res['quiz']['question']}")
-                                        st.info(f"**내 답변:** {res['user_answer']}")
+                                # 상세 정보가 이미 로드되었는지 확인
+                                is_loaded = att_id in st.session_state.attempt_details
+                                
+                                exp_label = f"📝 {format_date(att['created_at'])} — 점수: :{color}[{score}점] ({att['correct_count']}/{att['quiz_count']})"
+                                with st.expander(exp_label, expanded=True):
+                                    # 상세 조회가 안 되어 있다면 버튼 클릭으로 유도하거나 자동 로드
+                                    if not is_loaded:
+                                        if st.button("상세 결과 보기", key=f"det_{att_id}"):
+                                            with st.spinner("상세 데이터 로드 중..."):
+                                                detail_res = api_client.get_attempt_detail(att_id)
+                                                st.session_state.attempt_details[att_id] = detail_res.get("data", {})
+                                                st.rerun()
+                                    else:
+                                        # 상세 데이터 표시
+                                        detail = st.session_state.attempt_details[att_id]
+                                        m1, m2, m3 = st.columns(3)
+                                        m1.metric("점수", f"{detail['score']}점")
+                                        m2.metric("정답", f"{detail['correct_count']}개")
+                                        m3.metric("오답", f"{detail['quiz_count'] - detail['correct_count']}개")
+                                        
+                                        st.markdown("---")
+                                        for res in detail.get("results", []):
+                                            icon = "✅" if res['is_correct'] else "❌"
+                                            st.write(f"{icon} **Q.** {res['question']}")
+                                            if not res['is_correct']:                                                
+                                                st.success(f"**정답:** {res['correct_answer']}")
+                                                st.error(f"**내 답변:** {res['user_answer']}")
+                                            else:
+                                                st.success(f"**내 답변:** {res['user_answer']}")
     
     except Exception as e:
         st.error(f"❌ 데이터를 가져오는 중 오류가 발생했습니다: {e}")

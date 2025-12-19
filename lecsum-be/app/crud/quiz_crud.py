@@ -130,16 +130,6 @@ def get_wrong_answers(db: Session, limit: int, offset: int):
         .all()
     )
 
-# 응시기록 조회
-def get_attempts_by_quiz_set(db: Session, quiz_set_id: int):
-    """
-    특정 퀴즈 세트(시험지)의 모든 응시 기록 조회
-    """
-    return db.query(Attempt)\
-        .options(joinedload(Attempt.results))\
-        .filter(Attempt.quiz_set_id == quiz_set_id)\
-        .order_by(Attempt.created_at.desc())\
-        .all()
 # 응시 기록 목록 조회
 def get_attempts(db: Session, quiz_set_id: int = None, limit: int = 50, offset: int = 0):
     """

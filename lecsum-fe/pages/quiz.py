@@ -9,8 +9,8 @@ api_client = APIClient()
 
 def init_session_state():
     """세션 상태 초기화 함수"""
-    if "selected_pdf_id" not in st.session_state:
-        st.session_state.selected_pdf_id = None
+    if "selected_document_id" not in st.session_state:
+        st.session_state.selected_document_id = None
     if "current_quiz" not in st.session_state:
         st.session_state.current_quiz = None
     if "grade_result" not in st.session_state:
@@ -22,7 +22,7 @@ init_session_state()
 render_header("📝 AI 퀴즈", "강의 자료를 분석하여 맞춤형 문제를 생성합니다.")
 
 # 3. 메인 화면 로직
-if not st.session_state.selected_pdf_id:
+if not st.session_state.selected_document_id:
     st.warning("👈 먼저 사이드바에서 PDF ID를 입력하고 '문서 확정'을 눌러주세요.")
 else:
     # --- 퀴즈 생성 섹션 ---
@@ -35,7 +35,7 @@ else:
         if st.button("✨ 새로운 퀴즈 생성", use_container_width=True):
             with st.spinner("AI가 문서를 읽고 문제를 구성하는 중입니다..."):
                 try:
-                    response = api_client.generate_quiz(st.session_state.selected_pdf_id)
+                    response = api_client.generate_quiz(st.session_state.selected_document_id)
                     st.session_state.current_quiz = response.get("data")
                     st.session_state.grade_result = None
                     st.rerun()

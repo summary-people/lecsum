@@ -7,10 +7,13 @@ from app.db.quiz_schemas import (
     QuizResponse,
     GradeRequest,
     GradeResponse,
+    RetryGradeRequest,
     QuizSetDto,
     WrongAnswerItem,
     RetryQuizRequest,
     RetryQuizResponse,
+    AttemptDto,
+    AttemptDetailDto,
 )
 from app.db.schemas import CommonResponse
 from app.db.database import get_db
@@ -379,3 +382,143 @@ async def create_retry_quiz(
         message="재시험이 생성되었습니다.",
         data=result
     )
+
+@router.get(
+    "/attempts",
+    response_model=CommonResponse[List[AttemptDto]],
+    summary="응시 기록 목록 조회",
+    description="""
+퀴즈 응시 기록 목록을 조회합니다.
+
+### 파라미터
+- **quiz_set_id** (선택): 특정 퀴즈 세트의 응시 기록만 조회
+- **limit** (선택): 조회할 최대 개수 (기본값: 50)
+- **offset** (선택): 건너뛸 개수 (페이지네이션용, 기본값: 0)
+
+### 반환 데이터
+- 응시 ID, 점수, 문제 수, 정답 수, 응시 일시
+"""
+)
+async def get_attempts(
+    quiz_set_id: int = None,
+    limit: int = 50,
+    offset: int = 0,
+    db: Session = Depends(get_db)
+):
+    """
+    응시 기록 목록 조회
+    """
+    result = quiz_service.get_attempt_list(db, quiz_set_id, limit, offset)
+    return CommonResponse(data=result)
+
+@router.get(
+    "/attempts/{attempt_id}",
+    response_model=CommonResponse[AttemptDetailDto],
+    summary="응시 기록 상세 조회",
+    description="""
+특정 응시 기록의 상세 정보를 조회합니다.
+
+### 반환 데이터
+- 응시 기본 정보 (점수, 문제 수 등)
+- 문제별 답안 결과
+  - 사용자 답변
+  - 정답 여부
+  - 문제 내용
+  - 정답
+"""
+)
+async def get_attempt_detail(
+    attempt_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    응시 기록 상세 조회 (문제별 결과 포함)
+    """
+    result = quiz_service.get_attempt_detail(db, attempt_id)
+    return CommonResponse(data=result)
+
+# 재시험 채점 API
+@router.post(
+    "/retry/grade",
+    response_model=CommonResponse[GradeResponse],
+    summary="재시험 채점",
+    description="""
+재시험(retry_quiz_set)에 대한 사용자 답안을 받아 채점합니다.
+
+### 처리 절차
+1. 재시험 세트 ID 및 사용자 답안 입력
+2. 정답과 비교하여 채점
+3. 문제별 정답 여부 및 점수 계산
+4. 재시험 응시 기록(Attempt)을 생성하고 채점 결과 저장
+5. 채점 결과 반환
+
+### 주요 차이점
+- quiz_set_id 대신 retry_quiz_set_id 사용
+- Attempt 테이블의 retry_quiz_set_id 컬럼에 저장
+""",
+    responses={
+        200: {
+            "description": "채점 완료",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "success": True,
+                        "data": {
+                            "attempt_id": 10,
+                            "score": 85,
+                            "results": [
+                                {
+                                    "is_correct": True,
+                                    "feedback": "정답입니다!"
+                                },
+                                {
+                                    "is_correct": False,
+                                    "feedback": "아쉽게도 틀렸습니다. 정답은..."
+                                }
+                            ],
+                        },
+                        "message": "재시험 채점이 완료되었습니다.",
+                    }
+                }
+            },
+        },
+        400: {
+            "description": "잘못된 요청",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "success": False,
+                        "data": None,
+                        "message": "채점할 퀴즈가 존재하지 않습니다.",
+                    }
+                }
+            },
+        },
+        500: {
+            "description": "서버 오류",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "success": False,
+                        "data": None,
+                        "message": "채점 처리 중 오류가 발생했습니다.",
+                    }
+                }
+            },
+        },
+    },
+)
+async def grade_retry_quiz(
+    request: RetryGradeRequest,
+    db: Session = Depends(get_db),
+):
+    """
+    재시험 답안을 받아 채점하고 결과를 저장합니다.
+    """
+    result = await quiz_service.grade_retry_quiz_set(db, request)
+
+    return CommonResponse(
+        message="재시험 채점이 완료되었습니다.",
+        data=result,
+    )
+ 

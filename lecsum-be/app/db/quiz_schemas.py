@@ -81,6 +81,7 @@ class WrongAnswerItem(BaseModel):
     explanation: str
     user_answer: str          # 내가 틀린 답
     attempt_id: int           # 어느 시험에서 틀렸는지 (응시 기록)
+    pdf_name: Optional[str] = None  # 원본 PDF 파일명
 
 # [Request] 오답 재시험 생성 요청
 class RetryQuizRequest(BaseModel):

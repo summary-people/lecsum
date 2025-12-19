@@ -320,7 +320,7 @@ def get_wrong_answer_list(db: Session, limit: int, offset: int):
         )
 
     items = []
-    for result, quiz_obj in results:
+    for result, quiz_obj, pdf_obj in results:
 
         items.append(WrongAnswerItem(
             quiz_id=quiz_obj.id,
@@ -331,7 +331,7 @@ def get_wrong_answer_list(db: Session, limit: int, offset: int):
             explanation=quiz_obj.explanation,
             user_answer=result.user_answer,
             attempt_id=result.attempt_id,
-            created_at=result.created_at
+            pdf_name=pdf_obj.original_filename if pdf_obj else None
         ))
 
     return items

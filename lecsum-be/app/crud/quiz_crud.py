@@ -114,11 +114,15 @@ def remove_quiz_set(db: Session, quiz_set_id: int) -> bool:
 # 틀린 문제 조회
 def get_wrong_answers(db: Session, limit: int, offset: int):
     """
-    is_correct = False인 QuizResult 조회 + Quiz 정보 조인
+    is_correct = False인 QuizResult 조회 + Quiz, QuizSet, PdfFile 정보 조인
     """
+    from app.models.pdf import PdfFile
+
     return (
-        db.query(QuizResult, Quiz)
+        db.query(QuizResult, Quiz, PdfFile)
         .join(Quiz, QuizResult.quiz_id == Quiz.id)
+        .join(QuizSet, Quiz.quiz_set_id == QuizSet.id)
+        .join(PdfFile, QuizSet.pdf_id == PdfFile.id)
         .filter(QuizResult.is_correct == False)
         .order_by(QuizResult.created_at.desc())
         .limit(limit)

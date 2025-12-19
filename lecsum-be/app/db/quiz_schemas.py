@@ -93,6 +93,7 @@ class RetryQuizResponse(BaseModel):
     total_questions: int
     quizzes: List[QuizItem]
 
+
 # [DTO] 재시험 세트 조회용
 class RetryQuizSetDto(BaseModel):
     id: int
@@ -102,6 +103,7 @@ class RetryQuizSetDto(BaseModel):
 
     class Config:
         from_attributes = True
+
 
 # [DTO] 응시 기록 조회용
 class AttemptDto(BaseModel):

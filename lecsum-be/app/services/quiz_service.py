@@ -227,12 +227,25 @@ async def grade_retry_quiz_set(db: Session, request) -> GradeResponse:
 
 async def run_enrichment_task(quiz, user_ans, original_feedback):
     """개별 오답에 대해 검색을 수행하고 해설을 생성하는 비동기 태스크"""
+    formatted_search = "" # 초기값 빈 문자열
+    
+    # Google Search (비동기 호출)
     try:
-        # A. Google Search (비동기 호출)
         search_query = f"{quiz.question} 개념 및 예시"
-        formatted_search = await search_and_format_run(search_query)
+        formatted_search = await asyncio.wait_for(
+            search_and_format_run(search_query), 
+            timeout=7.0  # 7초 초과 시 TimeoutError 발생
+        )
+    except asyncio.TimeoutError:
+        print(f"⌛ Search Timeout for quiz {quiz.id}: 검색 시간이 너무 오래 걸려 건너뜁니다.")
+        formatted_search = ""
+    except Exception as e:
+        print(f"⚠️ Search Failed for quiz {quiz.id}: {e}")
+        # 검색 실패 시 빈 값 유지
+        formatted_search = ""
 
-        # B. Enrichment Chain 실행
+    # Enrichment Chain 실행
+    try:
         enriched_text = await enrich_chain.ainvoke({
             "question": quiz.question,
             "user_answer": user_ans,
@@ -243,9 +256,9 @@ async def run_enrichment_task(quiz, user_ans, original_feedback):
         return enriched_text
         
     except Exception as e:
-        print(f"⚠️ Enrichment Failed for quiz {quiz.id}: {e}")
-        # 검색이 실패했더라도, 최소한의 기존 해설은 제공
-        return f"아쉽게도 틀렸습니다.\n\n[해설]\n{quiz.explanation}"
+        print(f"⚠️ Enrichment Chain Failed for quiz {quiz.id}: {e}")
+        # LLM 자체가 실패 시
+        return f"아쉽네요! 정답은 **{quiz.correct_answer}**입니다.\n\n**📘 강의 포인트**\n{quiz.explanation}"
 
 async def grade_and_enrich_pipeline(formatted_block: str, quizzes: list, user_answers: list) -> GradeResultList:
     """

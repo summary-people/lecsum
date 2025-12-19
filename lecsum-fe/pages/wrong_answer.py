@@ -44,7 +44,7 @@ else:
         with st.expander(f"{question_preview}", expanded=False):
             # PDF 출처 표시
             if item.get('pdf_name'):
-                st.caption(f"📄 출처: {item['pdf_name']}")
+                st.caption(f"📄 원본 PDF : {item['pdf_name']}")
 
             st.markdown("---")
 
@@ -86,6 +86,16 @@ else:
             # 해설
             st.markdown("### 💡 해설")
             st.info(item['explanation'])
+
+            # 재시험 생성 버튼
+            st.markdown("---")
+            if st.button(f"🔄 재시험 시작하기", key=f"retry_btn_{item['attempt_id']}_{idx}"):
+                # attempt_id를 세션 스테이트에 저장하고 바로 생성 모드로
+                st.session_state['retry_attempt_id'] = item['attempt_id']
+                st.session_state['auto_create_retry'] = True
+                st.success("✅ 재시험이 준비되었습니다!")
+                st.info("👉 왼쪽 사이드바에서 **Retry Exam** 메뉴를 클릭하세요. 자동으로 재시험이 생성됩니다.")
+                st.stop()  # 추가 렌더링 중지
 
             # 구분선
             if idx < len(wrong_answers):

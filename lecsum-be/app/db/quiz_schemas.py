@@ -5,7 +5,6 @@ from datetime import datetime
 
 class QuizRequest(BaseModel):
     pdf_id: int
-    query: str = Field(description="vectorDB 검색 키워드", default="핵심 내용")
 
 # 퀴즈 하나의 구조
 class QuizItem(BaseModel):

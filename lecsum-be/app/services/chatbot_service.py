@@ -47,7 +47,7 @@ async def chat_with_documents(request: ChatRequest, db: Session) -> ChatResponse
         vec_results = vectorstore.similarity_search(
             request.question,
             k=5,
-            filter={"document_uuid": document.uuid}
+            filter={"document_uuid": request.pdf_id}
         )
     else:
         # 전체 문서 검색
@@ -147,7 +147,7 @@ async def recommend_resources(request: RecommendRequest, db: Session) -> Recomme
     
     vec_results = vectorstore.similarity_search(
         "핵심 개념 주요 내용",
-        k=3, 
+        k=3,
         filter={"document_uuid": document.uuid}
     )
     

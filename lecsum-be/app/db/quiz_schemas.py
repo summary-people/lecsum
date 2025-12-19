@@ -85,13 +85,14 @@ class WrongAnswerItem(BaseModel):
 
 # [Request] 오답 재시험 생성 요청
 class RetryQuizRequest(BaseModel):
-    attempt_id: int = Field(description="원본 시험 응시 ID (틀린 문제들을 자동 추출)")
+    quiz_ids: List[int] = Field(description="재시험을 생성할 틀린 문제 ID 리스트")
 
 # [Response] 오답 재시험 생성 응답
 class RetryQuizResponse(BaseModel):
     retry_quiz_set_id: int = Field(description="생성된 재시험 세트 ID")
     total_questions: int
     quizzes: List[QuizItem]
+
 
 # [DTO] 재시험 세트 조회용
 class RetryQuizSetDto(BaseModel):
@@ -102,6 +103,7 @@ class RetryQuizSetDto(BaseModel):
 
     class Config:
         from_attributes = True
+
 
 # [DTO] 응시 기록 조회용
 class AttemptDto(BaseModel):

@@ -331,7 +331,7 @@ def get_wrong_answer_list(db: Session, limit: int, offset: int):
             explanation=quiz_obj.explanation,
             user_answer=result.user_answer,
             attempt_id=result.attempt_id,
-            pdf_name=pdf_obj.original_filename if pdf_obj else None
+            pdf_name=pdf_obj.name if pdf_obj else None
         ))
 
     return items

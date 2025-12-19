@@ -63,9 +63,6 @@ class Attempt(Base):
     # 1:N 관계
     results = relationship("QuizResult", back_populates="attempt", cascade="all, delete-orphan")
 
-    # 1:N 관계 - 이 시험에서 틀린 문제로 만든 재시험들
-    retry_sets = relationship("RetryQuizSet", foreign_keys="RetryQuizSet.original_attempt_id", back_populates="original_attempt")
-
 # 상세 답안
 class QuizResult(Base):
     __tablename__ = "quiz_result"
@@ -90,12 +87,8 @@ class RetryQuizSet(Base):
     __tablename__ = "retry_quiz_set"
 
     id = Column(Integer, primary_key=True, index=True)
-    original_attempt_id = Column(Integer, ForeignKey("attempt.id"), nullable=False, index=True)
     quiz_set_id = Column(Integer, ForeignKey("quiz_set.id"), nullable=False, index=True)  # 생성된 재시험 QuizSet
     created_at = Column(DateTime, default=datetime.now)
-
-    # N:1 관계 - 어느 시험에서 틀린 문제들인지
-    original_attempt = relationship("Attempt", foreign_keys=[original_attempt_id], back_populates="retry_sets")
 
     # N:1 관계 - 생성된 재시험 QuizSet (PDF 정보 접근용)
     quiz_set = relationship("QuizSet", foreign_keys=[quiz_set_id])

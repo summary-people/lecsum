@@ -14,17 +14,30 @@ if 'retry_answers' not in st.session_state:
 if 'retry_result' not in st.session_state:
     st.session_state['retry_result'] = None
 if 'retry_step' not in st.session_state:
-    st.session_state['retry_step'] = 'list'  # list, creating, taking, result
+    st.session_state['retry_step'] = 'list'  # list, history_detail, creating, taking, result
 if 'auto_create_retry' not in st.session_state:
     st.session_state['auto_create_retry'] = False
+if 'selected_retry_attempt' not in st.session_state:
+    st.session_state['selected_retry_attempt'] = None
+
+# wrong_answer 페이지에서 재시험을 생성한 경우 자동으로 응시 화면으로 이동
+if 'current_retry_quiz' in st.session_state:
+    retry_data = st.session_state['current_retry_quiz']
+    st.session_state['retry_quiz_set_id'] = retry_data['retry_quiz_set_id']
+    st.session_state['retry_quizzes'] = retry_data['quizzes']
+    st.session_state['retry_answers'] = {}
+    st.session_state['retry_result'] = None
+    st.session_state['retry_step'] = 'taking'
+    # 처리 후 삭제
+    del st.session_state['current_retry_quiz']
 
 
-def create_retry_quiz(attempt_id):
+def create_retry_quiz(quiz_ids):
     """재시험 생성 API 호출"""
     try:
         response = requests.post(
             f"{API_URL}/api/quizzes/wrong-answers/retry",
-            json={"attempt_id": attempt_id}
+            json={"quiz_ids": quiz_ids}
         )
         if response.status_code == 200:
             data = response.json()
@@ -77,6 +90,21 @@ def fetch_retry_attempts(limit=50):
         return []
 
 
+def fetch_attempt_detail(attempt_id):
+    """특정 응시 기록의 상세 정보 조회"""
+    try:
+        response = requests.get(f"{API_URL}/api/quizzes/attempts/{attempt_id}")
+        if response.status_code == 200:
+            data = response.json()
+            return data.get("data")
+        else:
+            st.error(f"상세 정보 조회 실패: {response.status_code}")
+            return None
+    except Exception as e:
+        st.error(f"서버 연결 실패: {e}")
+        return None
+
+
 # ==================== 화면 1: 재시험 목록 ====================
 def show_list_screen():
     st.title("🔄 재시험")
@@ -120,32 +148,141 @@ def show_list_screen():
         else:
             date_str = str(created_at)
 
-        st.markdown(f"""
-        <div style="background-color: white; padding: 20px; border-radius: 10px;
-                    margin-bottom: 15px; border-left: 4px solid {score_color};">
-            <h3 style="color: black;">{emoji} 재시험 #{attempt['id']}</h3>
-            <p style="color: gray; font-size: 14px;">📅 {date_str}</p>
-            <p style="color: black;">
-                <strong>점수:</strong> <span style="color: {score_color}; font-size: 20px; font-weight: bold;">{score}점</span> |
-                <strong>정답률:</strong> {attempt['correct_count']}/{attempt['quiz_count']}문제
-            </p>
-        </div>
-        """, unsafe_allow_html=True)
+        # 카드 UI
+        col1, col2 = st.columns([4, 1])
+
+        with col1:
+            st.markdown(f"""
+            <div style="background-color: white; padding: 20px; border-radius: 10px;
+                        margin-bottom: 15px; border-left: 4px solid {score_color};">
+                <h3 style="color: black;">{emoji} 재시험 #{attempt['id']}</h3>
+                <p style="color: gray; font-size: 14px;">📅 {date_str}</p>
+                <p style="color: black;">
+                    <strong>점수:</strong> <span style="color: {score_color}; font-size: 20px; font-weight: bold;">{score}점</span> |
+                    <strong>정답률:</strong> {attempt['correct_count']}/{attempt['quiz_count']}문제
+                </p>
+            </div>
+            """, unsafe_allow_html=True)
+
+        with col2:
+            st.write("")  # 위치 조정
+            st.write("")
+            if st.button("상세보기 →", key=f"detail_{attempt['id']}", use_container_width=True):
+                st.session_state['selected_retry_attempt'] = attempt['id']
+                st.session_state['retry_step'] = 'history_detail'
+                st.rerun()
 
 
-# ==================== 화면 2: 재시험 자동 생성 중 ====================
-def show_creating_screen():
-    st.title("🔄 재시험 생성 중...")
+# ==================== 화면 2: 재시험 기록 상세 ====================
+def show_history_detail_screen():
+    st.title("📊 재시험 기록 상세")
     st.markdown("---")
 
-    if not st.session_state.get('retry_attempt_id'):
-        st.error("오류: attempt_id가 없습니다.")
+    attempt_id = st.session_state.get('selected_retry_attempt')
+    if not attempt_id:
+        st.error("오류: 선택된 재시험 기록이 없습니다.")
         st.session_state['retry_step'] = 'list'
         st.rerun()
         return
 
+    detail = fetch_attempt_detail(attempt_id)
+
+    if not detail:
+        st.error("상세 정보를 불러올 수 없습니다.")
+        if st.button("← 목록으로"):
+            st.session_state['selected_retry_attempt'] = None
+            st.session_state['retry_step'] = 'list'
+            st.rerun()
+        return
+
+    # 헤더
+    score = detail['score']
+    if score >= 80:
+        st.success(f"### 🎉 점수: {score}점")
+    elif score >= 60:
+        st.info(f"### 👍 점수: {score}점")
+    else:
+        st.warning(f"### 💪 점수: {score}점")
+
+    # 날짜 정보
+    created_at = detail['created_at']
+    if isinstance(created_at, str):
+        try:
+            dt = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+            date_str = dt.strftime('%Y년 %m월 %d일 %H:%M')
+        except:
+            date_str = created_at
+    else:
+        date_str = str(created_at)
+
+    st.caption(f"📅 응시 일시: {date_str}")
+    st.caption(f"📝 정답률: {detail['correct_count']}/{detail['quiz_count']}문제")
+
+    st.markdown("---")
+
+    # 뒤로가기 버튼
+    if st.button("← 목록으로 돌아가기"):
+        st.session_state['selected_retry_attempt'] = None
+        st.session_state['retry_step'] = 'list'
+        st.rerun()
+
+    st.markdown("---")
+
+    # 문제별 결과
+    results = detail.get('results', [])
+
+    if not results:
+        st.warning("문제 결과가 없습니다.")
+        return
+
+    for idx, result in enumerate(results, 1):
+        # 정답/오답 여부
+        is_correct = result['is_correct']
+        title_emoji = "✅" if is_correct else "❌"
+        title_text = "정답" if is_correct else "오답"
+
+        with st.expander(
+            f"문제 {idx}: {title_emoji} {title_text}",
+            expanded=not is_correct  # 오답만 자동으로 펼침
+        ):
+            # 문제 내용
+            st.markdown(f"**문제:** {result['question']}")
+
+            st.markdown("---")
+
+            # 답안 비교
+            col1, col2 = st.columns(2)
+
+            with col1:
+                st.markdown("**내가 쓴 답:**")
+                if is_correct:
+                    st.success(result.get('user_answer', '(답안 없음)'))
+                else:
+                    st.error(result.get('user_answer', '(답안 없음)'))
+
+            with col2:
+                st.markdown("**정답:**")
+                st.info(result['correct_answer'])
+
+
+# ==================== 화면 3: 재시험 자동 생성 중 ====================
+def show_creating_screen():
+    st.title("🔄 재시험 생성 중...")
+    st.markdown("---")
+
+    # quiz_ids가 세션에 있으면 사용, 없으면 빈 리스트
+    quiz_ids = st.session_state.get('retry_quiz_ids', [])
+
+    if not quiz_ids:
+        st.error("오류: 선택된 문제가 없습니다.")
+        st.session_state['retry_step'] = 'list'
+        st.rerun()
+        return
+
+    st.info(f"📝 선택된 문제: {len(quiz_ids)}개 → 재시험 문제: {len(quiz_ids) * 3}개 생성 중...")
+
     with st.spinner("📝 틀린 문제를 분석하고 유사한 문제를 생성하는 중... (문제당 3개씩)"):
-        retry_data = create_retry_quiz(st.session_state['retry_attempt_id'])
+        retry_data = create_retry_quiz(quiz_ids)
 
         if retry_data:
             st.session_state['retry_quiz_set_id'] = retry_data['retry_quiz_set_id']
@@ -159,11 +296,11 @@ def show_creating_screen():
             st.error("재시험 생성에 실패했습니다.")
             if st.button("← 목록으로"):
                 st.session_state['retry_step'] = 'list'
-                st.session_state.pop('retry_attempt_id', None)
+                st.session_state.pop('retry_quiz_ids', None)
                 st.rerun()
 
 
-# ==================== 화면 3: 재시험 응시 ====================
+# ==================== 화면 4: 재시험 응시 ====================
 def show_taking_screen():
     st.title("🔄 재시험 응시")
     st.markdown("---")
@@ -224,7 +361,7 @@ def show_taking_screen():
             st.session_state['retry_quizzes'] = []
             st.session_state['retry_answers'] = {}
             st.session_state['retry_result'] = None
-            st.session_state.pop('retry_attempt_id', None)
+            st.session_state.pop('retry_quiz_ids', None)
             st.rerun()
 
     with col2:
@@ -254,7 +391,7 @@ def show_taking_screen():
                         st.rerun()
 
 
-# ==================== 화면 4: 결과 확인 ====================
+# ==================== 화면 5: 결과 확인 ====================
 def show_result_screen():
     st.title("🎯 재시험 결과")
     st.markdown("---")
@@ -314,7 +451,7 @@ def show_result_screen():
             st.session_state['retry_quizzes'] = []
             st.session_state['retry_answers'] = {}
             st.session_state['retry_result'] = None
-            st.session_state.pop('retry_attempt_id', None)
+            st.session_state.pop('retry_quiz_ids', None)
             st.rerun()
 
 
@@ -327,6 +464,8 @@ if st.session_state.get('auto_create_retry'):
 # 현재 단계에 따라 화면 표시
 if st.session_state['retry_step'] == 'list':
     show_list_screen()
+elif st.session_state['retry_step'] == 'history_detail':
+    show_history_detail_screen()
 elif st.session_state['retry_step'] == 'creating':
     show_creating_screen()
 elif st.session_state['retry_step'] == 'taking':

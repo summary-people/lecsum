@@ -338,42 +338,35 @@ def get_wrong_answer_list(db: Session, limit: int, offset: int):
 
 async def create_retry_quiz(db: Session, request: RetryQuizRequest) -> RetryQuizResponse:
     """
-    특정 응시(Attempt)에서 틀린 문제들로 재시험 생성
-    1. attempt_id에서 틀린 문제들 자동 추출
-    2. 각 틀린 문제당 유사한 문제 3개씩 LLM 생성
+    선택한 틀린 문제들로 재시험 생성
+    1. quiz_ids로 문제들 조회
+    2. 각 문제당 유사한 문제 3개씩 LLM 생성
     3. 생성된 문제들을 새 QuizSet에 저장
 
-    예시: 틀린 문제 2개 → 총 6개 재시험 문제 생성
+    예시: 선택한 문제 2개 → 총 6개 재시험 문제 생성
     """
-    # 1. Attempt 조회
-    attempt = quiz_crud.get_attempt_by_id(db, request.attempt_id)
-    if not attempt:
-        raise HTTPException(status_code=404, detail="응시 기록을 찾을 수 없습니다.")
+    # 1. 선택한 문제들 조회
+    selected_quizzes = quiz_crud.get_quizzes_by_ids(db, request.quiz_ids)
 
-    # 2. 해당 Attempt에서 틀린 문제들 조회
-    wrong_results = (
-        db.query(quiz_crud.QuizResult, quiz_crud.Quiz)
-        .join(quiz_crud.Quiz, quiz_crud.QuizResult.quiz_id == quiz_crud.Quiz.id)
-        .filter(quiz_crud.QuizResult.attempt_id == request.attempt_id)
-        .filter(quiz_crud.QuizResult.is_correct == False)
-        .all()
-    )
+    if not selected_quizzes:
+        raise HTTPException(status_code=404, detail="선택한 문제를 찾을 수 없습니다.")
 
-    if not wrong_results:
-        raise HTTPException(status_code=400, detail="틀린 문제가 없습니다. 모든 문제를 맞추셨습니다!")
+    if len(selected_quizzes) != len(request.quiz_ids):
+        raise HTTPException(status_code=404, detail="일부 문제를 찾을 수 없습니다.")
 
-    # 3. 원본 QuizSet의 PDF ID 찾기
+    # 2. 원본 QuizSet의 PDF ID 찾기 (첫 번째 문제 기준)
+    first_quiz = selected_quizzes[0]
     original_quiz_set = db.query(quiz_crud.QuizSet).filter(
-        quiz_crud.QuizSet.id == attempt.quiz_set_id
+        quiz_crud.QuizSet.id == first_quiz.quiz_set_id
     ).first()
 
     if not original_quiz_set:
         raise HTTPException(status_code=404, detail="원본 퀴즈 세트를 찾을 수 없습니다.")
 
-    # 4. 각 틀린 문제당 유사 문제 3개씩 생성
+    # 3. 각 선택한 문제당 유사 문제 3개씩 생성
     all_generated_quizzes = []
 
-    for _, original_quiz in wrong_results:
+    for original_quiz in selected_quizzes:
         # 원본 문제 정보를 문자열로 포맷팅
         original_quiz_info = f"""
 문제 유형: {original_quiz.type}
@@ -405,7 +398,6 @@ async def create_retry_quiz(db: Session, request: RetryQuizRequest) -> RetryQuiz
     from app.models.quiz import RetryQuizSet, RetryQuizItem
 
     retry_quiz_set = RetryQuizSet(
-        original_attempt_id=request.attempt_id,
         quiz_set_id=new_quiz_set.id  # 생성된 QuizSet 연결
     )
     db.add(retry_quiz_set)
@@ -415,7 +407,7 @@ async def create_retry_quiz(db: Session, request: RetryQuizRequest) -> RetryQuiz
     retry_items = []
     saved_quiz_idx = 0
 
-    for _, original_quiz in wrong_results:
+    for original_quiz in selected_quizzes:
         # 이 원본 문제에서 생성된 3개 문제
         for _ in range(3):
             if saved_quiz_idx < len(saved_quizzes):

@@ -11,13 +11,13 @@ from app.core.searches import search_and_format_run
 
 
 async def generate_and_save_quiz(db: Session, request: QuizRequest) -> QuizResponse:
-    # [MySQL] pdf_id로 PDF 정보(UUID) 조회
-    pdf = file_crud.get_pdf_by_id(db, request.pdf_id)
-    if not pdf:
-        raise HTTPException(status_code=404, detail="PDF를 찾을 수 없습니다.")
+    # [MySQL] document_id로 PDF 정보(UUID) 조회
+    document = file_crud.get_document_by_id(db, request.document_id)
+    if not document:
+        raise HTTPException(status_code=404, detail="Document를 찾을 수 없습니다.")
     
     # UUID 추출 (VectorDB 검색용)
-    file_uuid = pdf.uuid 
+    file_uuid = document.uuid 
 
     # [VectorDB] 관련 문서 검색
     # file_id 필터에 찾아낸 UUID를 넣습니다.
@@ -28,7 +28,7 @@ async def generate_and_save_quiz(db: Session, request: QuizRequest) -> QuizRespo
         raise HTTPException(status_code=400, detail="관련된 내용을 찾을 수 없어 퀴즈를 생성할 수 없습니다.")
     
     # 최근 생성된 퀴즈 20개 조회
-    recent_questions = quiz_crud.get_recent_quiz_questions(db, request.pdf_id, limit=20)
+    recent_questions = quiz_crud.get_recent_quiz_questions(db, request.document_id, limit=20)
     
     # 프롬프트용 문자열로 포맷팅
     if not recent_questions:
@@ -53,7 +53,7 @@ async def generate_and_save_quiz(db: Session, request: QuizRequest) -> QuizRespo
     
     # [MySQL] 생성된 퀴즈 저장
     # 퀴즈 세트 생성
-    quiz_set = quiz_crud.create_quiz_set(db, pdf.id)
+    quiz_set = quiz_crud.create_quiz_set(db, document.id)
     
     # 개별 문제 저장
     saved_quizzes = quiz_crud.create_quiz_list(db, quiz_set.id, result.quizzes)
@@ -290,8 +290,8 @@ async def grade_and_enrich_pipeline(formatted_block: str, quizzes: list, user_an
             
     return grading_result
 
-def get_quiz_sets(db: Session, pdf_id: int):
-    quiz_sets = quiz_crud.get_quiz_sets_by_pdf(db, pdf_id)
+def get_quiz_sets(db: Session, document_id: int):
+    quiz_sets = quiz_crud.get_quiz_sets_by_document(db, document_id)
     if not quiz_sets:
          return []
          
@@ -320,7 +320,7 @@ def get_wrong_answer_list(db: Session, limit: int, offset: int):
         )
 
     items = []
-    for result, quiz_obj, pdf_obj in results:
+    for result, quiz_obj, document_obj in results:
 
         items.append(WrongAnswerItem(
             quiz_id=quiz_obj.id,
@@ -331,7 +331,7 @@ def get_wrong_answer_list(db: Session, limit: int, offset: int):
             explanation=quiz_obj.explanation,
             user_answer=result.user_answer,
             attempt_id=result.attempt_id,
-            pdf_name=pdf_obj.name if pdf_obj else None
+            document_name=document_obj.original_filename if document_obj else None
         ))
 
     return items
@@ -396,7 +396,7 @@ async def create_retry_quiz(db: Session, request: RetryQuizRequest) -> RetryQuiz
         all_generated_quizzes.extend(retry_result.quizzes)
 
     # 5. 새로운 QuizSet 생성 (재시험용)
-    new_quiz_set = quiz_crud.create_quiz_set(db, original_quiz_set.pdf_id)
+    new_quiz_set = quiz_crud.create_quiz_set(db, original_quiz_set.document_id)
 
     # 생성된 문제들 저장
     saved_quizzes = quiz_crud.create_quiz_list(db, new_quiz_set.id, all_generated_quizzes)

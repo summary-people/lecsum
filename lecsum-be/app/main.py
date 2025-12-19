@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.db.database import engine, Base
-from app.routers import upload_router, quiz_router, chatbot_router
+from app.routers import summarize_router, quiz_router, chatbot_router
 
 # DB 테이블 생성
 Base.metadata.create_all(bind=engine)
@@ -25,7 +25,7 @@ app.add_middleware(
 )
 
 # 라우터 등록
-app.include_router(upload_router.router)
+app.include_router(summarize_router.router)
 app.include_router(quiz_router.router)
 app.include_router(chatbot_router.router)
 

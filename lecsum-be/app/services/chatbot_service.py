@@ -34,10 +34,10 @@ async def chat_with_documents(request: ChatRequest, db: Session) -> ChatResponse
         persist_directory=CHROMA_PERSIST_DIR,
     )
     
-    # 1. 벡터 검색 (pdf_id로 uuid 조회 후 필터)
-    if request.pdf_id:
+    # 1. 벡터 검색 (document_id로 uuid 조회 후 필터)
+    if request.document_id:
         # MySQL에서 uuid 조회
-        document = file_crud.get_pdf_by_id(db, request.pdf_id)
+        document = file_crud.get_document_by_id(db, request.document_id)
         if not document:
             raise HTTPException(
                 status_code=404,
@@ -47,7 +47,7 @@ async def chat_with_documents(request: ChatRequest, db: Session) -> ChatResponse
         vec_results = vectorstore.similarity_search(
             request.question,
             k=5,
-            filter={"document_uuid": request.pdf_id}
+            filter={"document_uuid": request.document_id}
         )
     else:
         # 전체 문서 검색
@@ -125,7 +125,7 @@ async def recommend_resources(request: RecommendRequest, db: Session) -> Recomme
     - LLM으로 구조화된 추천 생성
     """
     # 1. MySQL에서 문서 및 키워드 조회
-    document = file_crud.get_pdf_by_id(db, request.pdf_id)
+    document = file_crud.get_document_by_id(db, request.document_id)
     
     if not document:
         raise HTTPException(

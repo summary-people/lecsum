@@ -1,6 +1,6 @@
 import streamlit as st
 from services.api_client import APIClient
-from utils.ui_components import render_sidebar
+from utils.ui_components import render_sidebar, render_header
 from datetime import datetime
 
 api_client = APIClient()
@@ -36,8 +36,7 @@ if "loaded_attempts" not in st.session_state:
 if "attempt_details" not in st.session_state:
     st.session_state.attempt_details = {}
 
-st.title("🗄️ 퀴즈 보관함")
-st.markdown("과거에 생성한 퀴즈와 응시 기록을 한눈에 확인하세요.")
+render_header("🗄️ 퀴즈 보관함", "과거에 생성한 퀴즈와 응시 기록을 한눈에 확인하세요.")
 
 
 # --- 메인 로직 ---

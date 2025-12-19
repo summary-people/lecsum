@@ -116,7 +116,7 @@ def get_wrong_answers(db: Session, limit: int, offset: int):
     """
     is_correct = False인 QuizResult 조회 + Quiz, QuizSet, documentFile 정보 조인
     """
-    from app.models.document import PdfFile
+    from app.models.document import DocumentFile
 
     return (
         db.query(QuizResult, Quiz, DocumentFile)

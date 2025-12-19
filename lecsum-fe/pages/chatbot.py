@@ -1,78 +1,49 @@
 import streamlit as st
 from services.api_client import APIClient
 
-# API 클라이언트 초기화
-api_client = APIClient()
+def render_chatbot_page():
+    # API 클라이언트 초기화
+    api_client = APIClient()
 
-st.title("📚 공부 챗봇")
-st.markdown("업로드한 강의 자료를 바탕으로 질문하고 답변을 받아보세요!")
-
-# 세션 상태 초기화
-if "chat_history" not in st.session_state:
-    st.session_state.chat_history = []
-if "selected_document_id" not in st.session_state:
-    st.session_state.selected_document_id = None
-if "selected_document_name" not in st.session_state:
-    st.session_state.selected_document_name = None
-
-# 사이드바: Document 선택
-with st.sidebar:
-    st.header("📄 문서 선택")
-    
-    # Document ID 입력 (임시로 직접 입력 방식)
-    document_id = st.number_input("Document ID", min_value=1, value=1, step=1)
-    
-    if st.button("문서 선택"):
-        st.session_state.selected_document_id = document_id
+    if "selected_document_id" not in st.session_state:
+        st.session_state.selected_document_id = None
+    if "selected_document_name" not in st.session_state:
+        st.session_state.selected_document_name = None
+    if "chat_history" not in st.session_state:
         st.session_state.chat_history = []
-    
-    if st.session_state.selected_document_id:
-        st.info(f"현재 문서 ID: {st.session_state.selected_document_id}")
-        
-        # 관련 자료 보기 버튼
-        if st.button(f"📚 document: {st.session_state.selected_document_id}번의 관련 자료 보기", use_container_width=True):
-            with st.spinner("자료 검색 중..."):
-                try:
-                    response = api_client.recommend_resources(
-                        document_id=st.session_state.selected_document_id
-                    )
-                    
-                    data = response.get("data", {})
-                    recommendations = data.get("recommendations", [])
-                    summary = data.get("summary", "")
-                    
-                    # 채팅 히스토리에 추천 자료 추가
-                    recommend_content = f"**💡 추천 이유:** {summary}\n\n"
-                    if recommendations:
-                        recommend_content += f"**✅ {len(recommendations)}개의 자료를 찾았습니다!**\n\n"
-                        for idx, rec in enumerate(recommendations, 1):
-                            recommend_content += f"**{idx}. {rec.get('title', 'N/A')}**\n"
-                            recommend_content += f"- 유형: {rec.get('type', 'N/A')}\n"
-                            recommend_content += f"- 링크: {rec.get('url', 'N/A')}\n"
-                            recommend_content += f"- 설명: {rec.get('description', 'N/A')}\n\n"
-                    else:
-                        recommend_content += "관련 자료를 찾지 못했습니다."
-                    
-                    st.session_state.chat_history.append({
-                        "question": f"document: {st.session_state.selected_document_id}번의 관련 자료 보기",
-                        "answer": recommend_content,
-                        "sources": [],
-                        "is_recommendation": True
-                    })
-                    st.rerun()
-                    
-                except Exception as e:
-                    st.error(f"❌ 오류 발생: {str(e)}")
-    
-    # 대화 기록 초기화
-    if st.button("🗑️ 대화 기록 초기화"):
-        st.session_state.chat_history = []
-        st.rerun()
 
-# 메인 영역: 채팅
-if not st.session_state.selected_document_id:
-    st.warning("⚠️ 왼쪽 사이드바에서 문서를 먼저 선택해주세요.")
-else:
+    st.title("📚 공부 챗봇")
+    st.markdown("업로드한 강의 자료를 바탕으로 질문하고 답변을 받아보세요!")
+
+    # 문서 선택 (메인 화면)
+    st.subheader("📄 문서 선택")
+
+    try:
+        response = api_client.get_documents(limit=50, offset=0)
+        documents = response.get("data", [])
+    except Exception:
+        documents = []
+
+    if not documents:
+        st.warning("업로드된 문서가 없습니다. 먼저 문서를 업로드해주세요.")
+        return
+
+    doc_options = {doc["name"]: doc["id"] for doc in documents}
+
+    selected_name = st.selectbox(
+        "요약/질문할 문서를 선택하세요",
+        list(doc_options.keys())
+    )
+
+    selected_id = doc_options[selected_name]
+
+    if st.session_state.selected_document_id != selected_id:
+        st.session_state.selected_document_id = selected_id
+        st.session_state.selected_document_name = selected_name
+        st.session_state.chat_history = []
+
+    st.info(f"선택된 문서: {selected_name}")
+
     # 대화 기록 표시
     for chat in st.session_state.chat_history:
         with st.chat_message("user"):
@@ -144,3 +115,6 @@ else:
                     
                 except Exception as e:
                     st.error(f"❌ 오류 발생: {str(e)}")
+
+if __name__ == "__main__":
+    render_chatbot_page()

@@ -1,10 +1,10 @@
 import streamlit as st
 import os
 from pages.upload import render_upload_page
-# from pages.exam import render_quiz_page
+from pages.quiz import render_quiz_page
 from pages.summaries import render_summaries_page
-# from pages.wrong_answer import render_wrong_notes_page
-# from pages.chatbot import render_chatbot_page
+from pages.wrong_answer import render_wrong_notes_page
+from pages.chatbot import render_chatbot_page
 
 page = st.query_params.get("page", "home")
 
@@ -176,14 +176,14 @@ if page == "home":
 elif page == "upload":
     render_upload_page()
 
-# elif page == "mentor":
-#     render_chatbot_page()
+elif page == "mentor":
+    render_chatbot_page()
 
-# elif page == "quiz":
-#     render_quiz_page()
+elif page == "quiz":
+    render_quiz_page()
 
 elif page == "summaries":
     render_summaries_page()
 
-# elif page == "wrong-notes":
-#     render_wrong_notes_page()
+elif page == "wrong-notes":
+    render_wrong_notes_page()

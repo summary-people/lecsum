@@ -2,21 +2,28 @@ import requests
 from typing import Optional, Dict, Any, List
 
 class APIClient:
-    def __init__(self, base_url: str = "http://localhost:8000", timeout: int = 15):
+    def __init__(self, base_url: str = "http://localhost:8000", timeout: int = 60):
         self.base_url = base_url
         self.timeout = timeout
     
 
-    def chat(self, document_id: int, question: str, chat_history: Optional[List[Dict[str, str]]] = None) -> Dict[str, Any]:
-        """챗봇 질문하기"""
+    def chat(self, document_id: int, question: str, chat_history: list):
+        url = f"{self.base_url}/api/chatbot/chat"
+
         payload = {
             "document_id": document_id,
             "question": question,
-            "chat_history": chat_history or []
+            "chat_history": chat_history 
         }
-        response = requests.post(f"{self.base_url}/api/chatbot/chat", json=payload)
-        response.raise_for_status()
-        return response.json()
+
+        res = requests.post(
+            url,
+            json=payload,
+            timeout=self.timeout
+        )
+
+        res.raise_for_status()
+        return res.json()
     
     def recommend_resources(self, document_id: int) -> Dict[str, Any]:
         """자료 추천받기"""
@@ -65,3 +72,28 @@ class APIClient:
                 "message": f"백엔드 요청 실패: {e}",
                 "data": None,
             }
+    
+    def generate_quiz(self, document_id: int) -> dict:
+        payload = {
+            "document_id": document_id
+        }
+
+        response = requests.post(
+            f"{self.base_url}/api/quizzes/generate",
+            json=payload,
+            timeout=self.timeout,
+        )
+        response.raise_for_status()
+        return response.json()
+    
+    def grade_quiz(self, quiz_set_id: int, quiz_id_list: list[int], user_answer_list: list[str]):
+        url = f"{self.base_url}/api/quizzes/grade"
+        payload = {
+            "quiz_set_id": quiz_set_id,
+            "quiz_id_list": quiz_id_list,
+            "user_answer_list": user_answer_list
+        }
+
+        res = requests.post(url, json=payload, timeout=self.timeout)
+        res.raise_for_status()
+        return res.json()

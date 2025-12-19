@@ -4,6 +4,7 @@ from typing import List
 
 # 문서 목록 조회
 class DocumentSummaryItem(BaseModel):
+    id: int
     uuid: str
     name: str
     summary: str

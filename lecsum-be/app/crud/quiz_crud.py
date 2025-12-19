@@ -4,8 +4,8 @@ from app.models.quiz import *
 from app.db.quiz_schemas import *
 
 # 퀴즈 세트(시험지) 생성
-def create_quiz_set(db: Session, pdf_id: int):
-    db_quiz_set = QuizSet(pdf_id=pdf_id)
+def create_quiz_set(db: Session, document_id: int):
+    db_quiz_set = QuizSet(document_id=document_id)
     db.add(db_quiz_set)
     db.commit()
     db.refresh(db_quiz_set)
@@ -37,9 +37,22 @@ def get_quizzes_by_ids(db: Session, quiz_ids: List[int]) -> List[Quiz]:
 
 # 응시 기록(Attempt) 생성
 def create_attempt(db: Session, quiz_set_id: int) -> Attempt:
-    
+
     attempt = Attempt(
         quiz_set_id=quiz_set_id,
+        score=0,
+        quiz_count=0,
+        correct_count=0
+    )
+    db.add(attempt)
+    db.flush()  # ID 생성을 위해 flush
+    return attempt
+
+# 재시험 응시 기록(Attempt) 생성
+def create_retry_attempt(db: Session, retry_quiz_set_id: int) -> Attempt:
+
+    attempt = Attempt(
+        retry_quiz_set_id=retry_quiz_set_id,
         score=0,
         quiz_count=0,
         correct_count=0
@@ -70,11 +83,11 @@ def update_attempt_score(db: Session, attempt_id: int, total_count: int, correct
         attempt.score = score
 
 # 최근 생성된 퀴즈 20개 반환
-def get_recent_quiz_questions(db: Session, pdf_id: int, limit: int = 20) -> List[str]:
+def get_recent_quiz_questions(db: Session, document_id: int, limit: int = 20) -> List[str]:
     stmt = (
         select(Quiz.question)
         .join(QuizSet, Quiz.quiz_set_id == QuizSet.id)
-        .where(QuizSet.pdf_id == pdf_id)
+        .where(QuizSet.document_id == document_id)
         .order_by(desc(Quiz.id))
         .limit(limit)
     )
@@ -82,10 +95,10 @@ def get_recent_quiz_questions(db: Session, pdf_id: int, limit: int = 20) -> List
     # [question1, question2, ...] 형태의 리스트 반환
     return db.execute(stmt).scalars().all()
 
-def get_quiz_sets_by_pdf(db: Session, pdf_id: int):
+def get_quiz_sets_by_document(db: Session, document_id: int):
     return db.query(QuizSet)\
         .options(joinedload(QuizSet.quizs))\
-        .filter(QuizSet.pdf_id == pdf_id)\
+        .filter(QuizSet.document_id == document_id)\
         .all()
 
 def remove_quiz_set(db: Session, quiz_set_id: int) -> bool:
@@ -101,11 +114,15 @@ def remove_quiz_set(db: Session, quiz_set_id: int) -> bool:
 # 틀린 문제 조회
 def get_wrong_answers(db: Session, limit: int, offset: int):
     """
-    is_correct = False인 QuizResult 조회 + Quiz 정보 조인
+    is_correct = False인 QuizResult 조회 + Quiz, QuizSet, documentFile 정보 조인
     """
+    from app.models.document import DocumentFile
+
     return (
-        db.query(QuizResult, Quiz)
+        db.query(QuizResult, Quiz, DocumentFile)
         .join(Quiz, QuizResult.quiz_id == Quiz.id)
+        .join(QuizSet, Quiz.quiz_set_id == QuizSet.id)
+        .join(DocumentFile, QuizSet.document_id == DocumentFile.id)
         .filter(QuizResult.is_correct == False)
         .order_by(QuizResult.created_at.desc())
         .limit(limit)
@@ -123,3 +140,41 @@ def get_attempts_by_quiz_set(db: Session, quiz_set_id: int):
         .filter(Attempt.quiz_set_id == quiz_set_id)\
         .order_by(Attempt.created_at.desc())\
         .all()
+# 응시 기록 목록 조회
+def get_attempts(db: Session, quiz_set_id: int = None, limit: int = 50, offset: int = 0):
+    """
+    응시 기록 목록 조회
+    quiz_set_id가 있으면 해당 퀴즈 세트의 응시 기록만 조회
+    """
+    query = db.query(Attempt)
+
+    if quiz_set_id:
+        query = query.filter(Attempt.quiz_set_id == quiz_set_id)
+
+    return (
+        query
+        .order_by(Attempt.created_at.desc())
+        .limit(limit)
+        .offset(offset)
+        .all()
+    )
+
+# 응시 기록 단건 조회
+def get_attempt_by_id(db: Session, attempt_id: int):
+    """
+    응시 기록 ID로 조회
+    """
+    return db.query(Attempt).filter(Attempt.id == attempt_id).first()
+
+# 응시 기록의 문제별 결과 조회 (Quiz 정보 포함)
+def get_quiz_results_with_quiz(db: Session, attempt_id: int):
+    """
+    특정 응시 기록의 문제별 결과와 Quiz 정보를 함께 조회
+    """
+    return (
+        db.query(QuizResult, Quiz)
+        .join(Quiz, QuizResult.quiz_id == Quiz.id)
+        .filter(QuizResult.attempt_id == attempt_id)
+        .order_by(QuizResult.id)
+        .all()
+    )

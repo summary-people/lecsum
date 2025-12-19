@@ -14,7 +14,7 @@ from langchain_openai import OpenAIEmbeddings
 from langchain_core.documents import Document
 
 
-from app.core.llm_client import summary_chain, keyword_chain
+from app.core.llm_client import summary_chain, keyword_chain, top_sentence_chain
 
 from pptx import Presentation
 
@@ -34,9 +34,11 @@ def extract_text_from_pptx(file_path: str) -> str:
 
     return "\n".join(texts)
 
-async def register_document(db: Session, file: UploadFile) -> str:
+async def register_document(db: Session, file: UploadFile, summary_type: str):
     """
     PDF / PPT 업로드 → 요약 생성 → VectorDB 저장 → MySQL 저장
+    Returns:
+        dict: {"id": 문서 ID, "summary": 요약}
     """
     file_uuid = str(uuid.uuid4())
     filename_lower = file.filename.lower()
@@ -65,18 +67,36 @@ async def register_document(db: Session, file: UploadFile) -> str:
         full_text = "\n".join(doc.page_content for doc in docs)
 
         # 요약 생성
-        summary: str = summary_chain.invoke({
-            "context": full_text
+        summary_result = summary_chain.invoke({
+            "context": full_text,
+            "summary_type": summary_type
         })
 
-        # 키워드 추출
-        keyword_text: str = keyword_chain.invoke({
-            "context": summary
-        })
+        summary = (
+            summary_result.content
+            if hasattr(summary_result, "content")
+            else str(summary_result)
+        )
 
-        keywords: list[str] = [
-            k.strip() for k in keyword_text.split(",") if k.strip()
+        keyword_result = keyword_chain.invoke({"context": full_text})
+
+        # 키워드 결과 정규화 (LLM 출력 형태 다양성 대응)
+        if hasattr(keyword_result, "content"):
+            raw_keywords = keyword_result.content
+        else:
+            raw_keywords = str(keyword_result)
+
+        # 문자열 → 리스트 변환 (쉼표/줄바꿈 기준)
+        keywords = [
+            k.strip()
+            for k in raw_keywords.replace("\n", ",").split(",")
+            if k.strip()
         ]
+
+        top_sentences = top_sentence_chain.invoke({
+            "context": full_text,
+            "k": 5
+        })
 
         keywords_str = ", ".join(keywords)
 
@@ -89,6 +109,7 @@ async def register_document(db: Session, file: UploadFile) -> str:
 
         for doc in splits:
             doc.metadata.update({
+                "document_id": doc.id,
                 "document_uuid": file_uuid,
                 "filename": file.filename,
                 "keywords": keywords_str,
@@ -105,7 +126,7 @@ async def register_document(db: Session, file: UploadFile) -> str:
         vectorstore.add_documents(splits)
 
         # MySQL 저장
-        file_crud.create_pdf(
+        document = file_crud.create_document(
             db=db,
             uuid=file_uuid,
             name=file.filename,
@@ -113,7 +134,15 @@ async def register_document(db: Session, file: UploadFile) -> str:
             keywords=keywords_str
         )
 
-        return summary
+        return DocumentSummaryDetail(
+            id=document.id,
+            uuid=document.uuid,
+            name=document.name,
+            summary=document.summary,
+            keywords=document.keywords.split(", ") if document.keywords else [],
+            top_sentences=top_sentences,
+            created_at=document.created_at,
+        )
 
     finally:
         if os.path.exists(temp_file_path):
@@ -123,7 +152,7 @@ def list_documents(db: Session, limit: int, offset: int):
     """
     업로드된 문서 요약 목록 조회
     """
-    pdf_files = file_crud.list_documents(
+    document_files = file_crud.list_documents(
         db=db,
         limit=limit,
         offset=offset,
@@ -131,24 +160,25 @@ def list_documents(db: Session, limit: int, offset: int):
 
     results: list[DocumentSummaryItem] = []
 
-    for pdf in pdf_files:
+    for document in document_files:
         results.append(
             DocumentSummaryItem(
-                uuid=pdf.uuid,
-                name=pdf.name,
-                summary=pdf.summary,
-                keywords=pdf.keywords.split(", ") if pdf.keywords else [],
-                created_at=pdf.created_at,
+                id=document.id,
+                uuid=document.uuid,
+                name=document.name,
+                summary=document.summary,
+                keywords=document.keywords.split(", ") if document.keywords else [],
+                created_at=document.created_at,
             )
         )
 
     return results
 
-def get_document_detail(db: Session, uuid: str):
+def get_document_detail(db: Session, document_id: int):
     """
     특정 문서 요약 상세 조회
     """
-    document = file_crud.get_document_by_uuid(db, uuid)
+    document = file_crud.get_document_by_id(db, document_id)
 
     if not document:
         raise HTTPException(
@@ -157,6 +187,7 @@ def get_document_detail(db: Session, uuid: str):
         )
 
     return DocumentSummaryDetail(
+        id=document.id,
         uuid=document.uuid,
         name=document.name,
         summary=document.summary,

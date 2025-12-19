@@ -1,34 +1,34 @@
 # MySQL CRUD Repository
 from sqlalchemy.orm import Session
 
-from app.models.document import PdfFile
+from app.models.document import DocumentFile
 
-def create_pdf(
+def create_document(
     db: Session,
     uuid: str,
     name: str,
     summary: str,
     keywords: str | None = None,
 ):
-    pdf = PdfFile(
+    document = DocumentFile(
         uuid=uuid,
         name=name,
         summary=summary,
         keywords=keywords,
     )
-    db.add(pdf)
+    db.add(document)
     db.commit()
-    db.refresh(pdf)
-    return pdf
+    db.refresh(document)
+    return document
 
-# PDF 정보 조회 (UUID 찾기용)
-def get_pdf_by_id(db: Session, pdf_id: int):
-    return db.query(PdfFile).filter(PdfFile.id == pdf_id).first()
+# 문서 정보 조회
+def get_document_by_id(db: Session, document_id: int):
+    return db.query(DocumentFile).filter(DocumentFile.id == document_id).first()
 
 def list_documents(db: Session, limit: int = 10, offset: int = 0):
     return (
-        db.query(PdfFile)
-        .order_by(PdfFile.created_at.desc())
+        db.query(DocumentFile)
+        .order_by(DocumentFile.created_at.desc())
         .offset(offset)
         .limit(limit)
         .all()
@@ -36,7 +36,7 @@ def list_documents(db: Session, limit: int = 10, offset: int = 0):
 
 def get_document_by_uuid(db: Session, uuid: str):
     return (
-        db.query(PdfFile)
-        .filter(PdfFile.uuid == uuid)
+        db.query(DocumentFile)
+        .filter(DocumentFile.uuid == uuid)
         .first()
     )

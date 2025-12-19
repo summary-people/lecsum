@@ -19,7 +19,7 @@ from langchain_openai import OpenAIEmbeddings
 from app.core.enums import ChromaDB, CHROMA_PERSIST_DIR
 from app.crud import file_crud
 
-async def chat_with_documents(request: ChatRequest) -> ChatResponse:
+async def chat_with_documents(request: ChatRequest, db: Session) -> ChatResponse:
     """
     벡터 DB 기반 Q&A 챗봇 (Chroma 사용)
     - Chroma에서 질문과 유사한 문서 검색 (document_uuid 필터 적용)
@@ -34,13 +34,20 @@ async def chat_with_documents(request: ChatRequest) -> ChatResponse:
         persist_directory=CHROMA_PERSIST_DIR,
     )
     
-    # 1. 벡터 검색 (document_uuid로 필터)
-    if request.pdf_id:
+    # 1. 벡터 검색 (document_id로 uuid 조회 후 필터)
+    if request.document_id:
+        # MySQL에서 uuid 조회
+        document = file_crud.get_document_by_id(db, request.document_id)
+        if not document:
+            raise HTTPException(
+                status_code=404,
+                detail="문서를 찾을 수 없습니다."
+            )
         # 특정 문서로 필터링
         vec_results = vectorstore.similarity_search(
             request.question,
             k=5,
-            filter={"document_uuid": request.pdf_id}
+            filter={"document_uuid": request.document_id}
         )
     else:
         # 전체 문서 검색
@@ -74,19 +81,40 @@ async def chat_with_documents(request: ChatRequest) -> ChatResponse:
     # 5. LLM 호출
     response = chatbot_llm.invoke(messages)
     
-    # 6. 출처 정보 구성
+    # ============================================================
+    # 6. 출처(sources) 정보 구성 (최대 3개)
+    # ============================================================
+    # ChatResponse의 sources 필드에 담을 정보를 생성
+    # - vec_results: Chroma에서 검색한 유사 문서 청크 리스트
+    # - 각 청크의 메타데이터에서 파일명, 페이지 번호 추출
+    # - 청크 내용(snippet)을 발췌하여 답변의 근거를 명확히 표시
+    # - RAG 시스템에서 "어디서 가져왔는지" 투명하게 공개
+    # - 상위 3개만 표시하여 응답 크기 최적화
+    # ============================================================
+    from app.db.mentor_schemas import SourceItem
+    
     sources = []
-    for i, doc in enumerate(vec_results):
+    for i, doc in enumerate(vec_results[:3]):  # 최대 3개로 제한
+        # Chroma에 저장된 메타데이터에서 파일명 추출
         filename = doc.metadata.get('filename', '알 수 없는 파일')
-        keywords = doc.metadata.get('keywords', '')
-        page_info = f"문서: {filename}"
-        if keywords:
-            page_info += f" (키워드: {keywords[:50]}...)" if len(keywords) > 50 else f" (키워드: {keywords})"
-        sources.append(page_info)
+        
+        # 페이지 번호 추출 (PDF 로더가 제공하는 경우)
+        page = doc.metadata.get('page')
+        
+        # 청크 내용에서 스니펫 추출 (최대 150자)
+        snippet = doc.page_content[:150].strip()
+        if len(doc.page_content) > 150:
+            snippet += "..."
+        
+        sources.append(SourceItem(
+            filename=filename,
+            page=page,
+            snippet=snippet
+        ))
     
     return ChatResponse(
         answer=response.content,
-        sources=sources
+        sources=sources  # 답변 근거가 된 문서 출처 리스트 (파일명, 페이지, 스니펫)
     )
 
 async def recommend_resources(request: RecommendRequest, db: Session) -> RecommendResponse:
@@ -97,7 +125,7 @@ async def recommend_resources(request: RecommendRequest, db: Session) -> Recomme
     - LLM으로 구조화된 추천 생성
     """
     # 1. MySQL에서 문서 및 키워드 조회
-    document = file_crud.get_document_by_uuid(db, request.pdf_id)
+    document = file_crud.get_document_by_id(db, request.document_id)
     
     if not document:
         raise HTTPException(
@@ -119,8 +147,8 @@ async def recommend_resources(request: RecommendRequest, db: Session) -> Recomme
     
     vec_results = vectorstore.similarity_search(
         "핵심 개념 주요 내용",
-        k=3, 
-        filter={"document_uuid": request.pdf_id}
+        k=3,
+        filter={"document_uuid": document.uuid}
     )
     
     context_text = ""

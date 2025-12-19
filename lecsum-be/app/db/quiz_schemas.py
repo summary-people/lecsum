@@ -4,7 +4,7 @@ from typing import List, Literal, Optional
 from datetime import datetime
 
 class QuizRequest(BaseModel):
-    pdf_id: int
+    document_id: int
 
 # 퀴즈 하나의 구조
 class QuizItem(BaseModel):
@@ -27,6 +27,12 @@ class QuizResponse(BaseModel):
     # [Request] 채점 요청
 class GradeRequest(BaseModel):
     quiz_set_id: int             # 시험지 ID (Attempt 생성용)
+    quiz_id_list: List[int]      # 문제 ID 리스트 (순서 중요)
+    user_answer_list: List[str]  # 사용자 답안 리스트 (문제 ID 순서와 대응)
+
+# [Request] 재시험 채점 요청
+class RetryGradeRequest(BaseModel):
+    retry_quiz_set_id: int       # 재시험 세트 ID (Attempt 생성용)
     quiz_id_list: List[int]      # 문제 ID 리스트 (순서 중요)
     user_answer_list: List[str]  # 사용자 답안 리스트 (문제 ID 순서와 대응)
 
@@ -59,7 +65,7 @@ class QuizDto(BaseModel):
 # QuizSet (문제지) DTO
 class QuizSetDto(BaseModel):
     id: int
-    pdf_id: int
+    document_id: int
     created_at: datetime
     quizs: List[QuizDto] = [] 
 
@@ -74,39 +80,66 @@ class WrongAnswerItem(BaseModel):
     correct_answer: str
     explanation: str
     user_answer: str          # 내가 틀린 답
-    attempt_id: int           # 어느 시험에서 틀렸는지
+    attempt_id: int           # 어느 시험에서 틀렸는지 (응시 기록)
+    document_name: Optional[str] = None  # 원본 PDF 파일명
 
 # [Request] 오답 재시험 생성 요청
 class RetryQuizRequest(BaseModel):
-    quiz_ids: List[int] = Field(description="틀린 문제 ID 리스트")
+    attempt_id: int = Field(description="원본 시험 응시 ID (틀린 문제들을 자동 추출)")
 
 # [Response] 오답 재시험 생성 응답
 class RetryQuizResponse(BaseModel):
-    quiz_set_ids: List[int] = Field(description="생성된 퀴즈 세트 ID 리스트 (각 문제가 원본 PDF에 연결)")
+    retry_quiz_set_id: int = Field(description="생성된 재시험 세트 ID")
     total_questions: int
     quizzes: List[QuizItem]
 
-# 응시기록 조회 DTO
-# [Request] 상세 채점 결과 DTO
-class QuizResultDto(BaseModel):
+
+# [DTO] 재시험 세트 조회용
+class RetryQuizSetDto(BaseModel):
     id: int
-    quiz_id: int
-    user_answer: Optional[str]
-    is_correct: bool
-    quiz: QuizDto  # 연관된 문제 정보 포함
+    original_attempt_id: int
+    created_at: datetime
+    quizzes: List[QuizItem]
 
     class Config:
         from_attributes = True
 
-# [Response] 응시 기록 상세 DTO (결과 리스트 포함)
-class AttemptDetailDto(BaseModel):
+
+# [DTO] 응시 기록 조회용
+class AttemptDto(BaseModel):
     id: int
-    quiz_set_id: int
+    quiz_set_id: Optional[int] = None
+    retry_quiz_set_id: Optional[int] = None
     score: int
     quiz_count: int
     correct_count: int
     created_at: datetime
-    results: List[QuizResultDto] = []
+
+    class Config:
+        from_attributes = True
+
+# [Response] 응시 기록 상세 조회 (문제 결과 포함)
+class AttemptDetailDto(BaseModel):
+    id: int
+    quiz_set_id: Optional[int] = None
+    retry_quiz_set_id: Optional[int] = None
+    score: int
+    quiz_count: int
+    correct_count: int
+    created_at: datetime
+    results: List["QuizResultDto"]
+
+    class Config:
+        from_attributes = True
+
+# [DTO] 문제별 답안 결과
+class QuizResultDto(BaseModel):
+    id: int
+    quiz_id: int
+    user_answer: Optional[str] = None
+    is_correct: bool
+    question: str  # Quiz 정보 포함
+    correct_answer: str  # Quiz 정보 포함
 
     class Config:
         from_attributes = True

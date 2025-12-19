@@ -7,11 +7,13 @@ from app.db.quiz_schemas import (
     QuizResponse,
     GradeRequest,
     GradeResponse,
+    RetryGradeRequest,
     QuizSetDto,
     WrongAnswerItem,
     RetryQuizRequest,
     RetryQuizResponse,
-    AttemptDetailDto
+    AttemptDto,
+    AttemptDetailDto,
 )
 from app.db.schemas import CommonResponse
 from app.db.database import get_db
@@ -31,7 +33,7 @@ router = APIRouter(
 PDF 문서를 기반으로 모의고사 문제를 자동 생성합니다.
 
 ### 처리 절차
-1. PDF 식별자(pdf_id) 입력
+1. PDF 식별자(document_id) 입력
 2. VectorDB(ChromaDB)에서 관련 문서 검색 (RAG)
 3. LLM을 이용해 문제 자동 생성
    - 빈칸 채우기 / 단어 맞추기 유형
@@ -98,7 +100,7 @@ async def generate_quiz(
     db: Session = Depends(get_db),
 ):
     """
-    pdf_id를 받아 퀴즈를 생성하고 DB에 저장 후 반환합니다.
+    document_id를 받아 퀴즈를 생성하고 DB에 저장 후 반환합니다.
     """
     result = await quiz_service.generate_and_save_quiz(db, request)
     return CommonResponse(data=result)
@@ -191,10 +193,10 @@ async def grade_quiz(
     response_model=CommonResponse[List[QuizSetDto]],
     summary="파일별 퀴즈 세트 목록 조회",
     description="""
-특정 파일(pdf_id)에 연관된 모든 퀴즈 세트(문제지) 목록을 조회합니다.
+특정 파일(document_id)에 연관된 모든 퀴즈 세트(문제지) 목록을 조회합니다.
 
 ### 처리 내용
-1. 요청받은 pdf_id로 생성된 퀴즈 세트를 DB에서 조회
+1. 요청받은 document_id로 생성된 퀴즈 세트를 DB에서 조회
 2. 각 퀴즈 세트에 포함된 문제(Quiz) 정보도 함께 로딩
 3. 생성일자 기준 내림차순 정렬하여 반환
 
@@ -213,7 +215,7 @@ async def grade_quiz(
                         "data": [
                             {
                                 "id": 10,
-                                "pdf_id": 3,
+                                "document_id": 3,
                                 "created_at": "2024-05-20T14:30:00",
                                 "quizs": [
                                     {"id": 101, "question": "문제 1번..."},
@@ -222,7 +224,7 @@ async def grade_quiz(
                             },
                             {
                                 "id": 5,
-                                "pdf_id": 3,
+                                "document_id": 3,
                                 "created_at": "2024-05-19T09:00:00",
                                 "quizs": []
                             }
@@ -258,11 +260,11 @@ async def grade_quiz(
         }
     }
 )
-async def get_quiz_list(pdf_id: int, db: Session = Depends(get_db)):
+async def get_quiz_list(document_id: int, db: Session = Depends(get_db)):
     """
     특정 파일에 생성된 퀴즈 세트 목록 조회
     """
-    result = quiz_service.get_quiz_sets(db, pdf_id)
+    result = quiz_service.get_quiz_sets(db, document_id)
     
     return CommonResponse(        
         data=result
@@ -382,89 +384,141 @@ async def create_retry_quiz(
     )
 
 @router.get(
-    "/quiz-sets/{quiz_set_id}/attempts",
-    # 여러 개의 응시 기록이 나올 수 있으므로 List로 감쌉니다.
-    response_model=CommonResponse[List[AttemptDetailDto]], 
-    summary="퀴즈 세트별 응시 기록 목록 조회",
+    "/attempts",
+    response_model=CommonResponse[List[AttemptDto]],
+    summary="응시 기록 목록 조회",
     description="""
-특정 퀴즈 세트(quiz_set_id)에 대한 사용자의 모든 응시 기록과 상세 결과를 조회합니다.
+퀴즈 응시 기록 목록을 조회합니다.
 
-### 처리 내용
-1. quiz_set_id에 해당하는 모든 Attempt 레코드 조회
-2. 각 응시 기록별 점수, 정답 개수 및 상세 답안(Results) 로딩
-3. 최신 응시일 순으로 정렬하여 반환
-    """,
+### 파라미터
+- **quiz_set_id** (선택): 특정 퀴즈 세트의 응시 기록만 조회
+- **limit** (선택): 조회할 최대 개수 (기본값: 50)
+- **offset** (선택): 건너뛸 개수 (페이지네이션용, 기본값: 0)
+
+### 반환 데이터
+- 응시 ID, 점수, 문제 수, 정답 수, 응시 일시
+"""
+)
+async def get_attempts(
+    quiz_set_id: int = None,
+    limit: int = 50,
+    offset: int = 0,
+    db: Session = Depends(get_db)
+):
+    """
+    응시 기록 목록 조회
+    """
+    result = quiz_service.get_attempt_list(db, quiz_set_id, limit, offset)
+    return CommonResponse(data=result)
+
+@router.get(
+    "/attempts/{attempt_id}",
+    response_model=CommonResponse[AttemptDetailDto],
+    summary="응시 기록 상세 조회",
+    description="""
+특정 응시 기록의 상세 정보를 조회합니다.
+
+### 반환 데이터
+- 응시 기본 정보 (점수, 문제 수 등)
+- 문제별 답안 결과
+  - 사용자 답변
+  - 정답 여부
+  - 문제 내용
+  - 정답
+"""
+)
+async def get_attempt_detail(
+    attempt_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    응시 기록 상세 조회 (문제별 결과 포함)
+    """
+    result = quiz_service.get_attempt_detail(db, attempt_id)
+    return CommonResponse(data=result)
+
+# 재시험 채점 API
+@router.post(
+    "/retry/grade",
+    response_model=CommonResponse[GradeResponse],
+    summary="재시험 채점",
+    description="""
+재시험(retry_quiz_set)에 대한 사용자 답안을 받아 채점합니다.
+
+### 처리 절차
+1. 재시험 세트 ID 및 사용자 답안 입력
+2. 정답과 비교하여 채점
+3. 문제별 정답 여부 및 점수 계산
+4. 재시험 응시 기록(Attempt)을 생성하고 채점 결과 저장
+5. 채점 결과 반환
+
+### 주요 차이점
+- quiz_set_id 대신 retry_quiz_set_id 사용
+- Attempt 테이블의 retry_quiz_set_id 컬럼에 저장
+""",
     responses={
         200: {
-            "description": "조회 성공",
+            "description": "채점 완료",
             "content": {
                 "application/json": {
                     "example": {
                         "success": True,
-                        "data": [
-                            {
-                                "id": 1,
-                                "quiz_set_id": 10,
-                                "score": 100,
-                                "quiz_count": 5,
-                                "correct_count": 5,
-                                "created_at": "2024-05-21T10:00:00",
-                                "results": [
-                                    {
-                                        "id": 6,
-                                        "quiz_id": 1,
-                                        "user_answer": "자율주행차",
-                                        "is_correct": False,
-                                        "quiz": {
-                                            "id": 1,
-                                            "number": 1,
-                                            "type": "multiple_choice",
-                                            "question": "다음 중 인공지능의 응용 기술에 해당하지 않는 것은?",
-                                            "options": [
-                                                "자율주행차",
-                                                "음성 인식",
-                                                "이미지 처리",
-                                                "웹 브라우저"
-                                            ]
-                                        }
-                                    },
-                                ]
-                            },
-                            {
-                                "id": 2,
-                                "quiz_set_id": 10,
-                                "score": 60,
-                                "quiz_count": 5,
-                                "correct_count": 3,
-                                "created_at": "2024-05-20T14:30:00",
-                                "results": [
-                                    {
-                                        "id": 6,
-                                        "quiz_id": 1,
-                                        "user_answer": "자율주행차",
-                                        "is_correct": False,
-                                        "quiz": {
-                                            "id": 1,
-                                            "number": 1,
-                                            "type": "multiple_choice",
-                                            "question": "다음 중 인공지능의 응용 기술에 해당하지 않는 것은?",
-                                            "options": [
-                                                "자율주행차",
-                                                "음성 인식",
-                                                "이미지 처리",
-                                                "웹 브라우저"
-                                            ]
-                                        }
-                                    },
-                                ]
-                            }
-                        ]
+                        "data": {
+                            "attempt_id": 10,
+                            "score": 85,
+                            "results": [
+                                {
+                                    "is_correct": True,
+                                    "feedback": "정답입니다!"
+                                },
+                                {
+                                    "is_correct": False,
+                                    "feedback": "아쉽게도 틀렸습니다. 정답은..."
+                                }
+                            ],
+                        },
+                        "message": "재시험 채점이 완료되었습니다.",
                     }
                 }
-            }
-        }
-    }
+            },
+        },
+        400: {
+            "description": "잘못된 요청",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "success": False,
+                        "data": None,
+                        "message": "채점할 퀴즈가 존재하지 않습니다.",
+                    }
+                }
+            },
+        },
+        500: {
+            "description": "서버 오류",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "success": False,
+                        "data": None,
+                        "message": "채점 처리 중 오류가 발생했습니다.",
+                    }
+                }
+            },
+        },
+    },
 )
-async def get_quiz_set_attempts(quiz_set_id: int, db: Session = Depends(get_db)):
-    result = quiz_service.get_quiz_set_attempt_history(db, quiz_set_id)
-    return CommonResponse(data=result)
+async def grade_retry_quiz(
+    request: RetryGradeRequest,
+    db: Session = Depends(get_db),
+):
+    """
+    재시험 답안을 받아 채점하고 결과를 저장합니다.
+    """
+    result = await quiz_service.grade_retry_quiz_set(db, request)
+
+    return CommonResponse(
+        message="재시험 채점이 완료되었습니다.",
+        data=result,
+    )
+ 

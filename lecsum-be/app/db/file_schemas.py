@@ -15,6 +15,7 @@ class DocumentSummaryItem(BaseModel):
 
 # 문서 상세 조회
 class DocumentSummaryDetail(BaseModel):
+    id: int
     uuid: str
     name: str
     summary: str

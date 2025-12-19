@@ -5,8 +5,8 @@ from sqlalchemy.orm import relationship
 from app.db.database import Base
 
 # PDF 파일 정보
-class PdfFile(Base):
-    __tablename__ = "pdf_files"
+class DocumentFile(Base):
+    __tablename__ = "document_files"
 
     id = Column(Integer, primary_key=True, index=True)
     uuid = Column(String(36), unique=True, index=True, nullable=False)
@@ -22,6 +22,6 @@ class PdfFile(Base):
     # PDF 1 : N QuizSet
     quiz_sets = relationship(
         "QuizSet",
-        back_populates="pdf",
+        back_populates="document",
         cascade="all, delete-orphan"
     )

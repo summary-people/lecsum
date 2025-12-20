@@ -97,3 +97,27 @@ class APIClient:
         res = requests.post(url, json=payload, timeout=self.timeout)
         res.raise_for_status()
         return res.json()
+    
+    def get_quiz_sets(self, document_id: int) -> Dict[str, Any]:
+        """퀴즈 목록 불러오기"""
+        params = {"document_id": document_id}
+        response = requests.get(f"{self.base_url}/api/quizzes/quiz-sets", params=params)
+        response.raise_for_status()
+        return response.json()
+
+    def get_attempts(self, quiz_set_id: Optional[int] = None, limit: int = 10, offset: int = 0) -> Dict[str, Any]:
+        """응시 기록 목록 조회"""
+        params = {
+            "quiz_set_id": quiz_set_id,
+            "limit": limit,
+            "offset": offset
+        }
+        response = requests.get(f"{self.base_url}/api/quizzes/attempts", params=params)
+        response.raise_for_status()
+        return response.json()
+
+    def get_attempt_detail(self, attempt_id: int) -> Dict[str, Any]:
+        """응시 기록 상세 조회 (문제별 결과 포함)"""
+        response = requests.get(f"{self.base_url}/api/quizzes/attempts/{attempt_id}")
+        response.raise_for_status()
+        return response.json()

@@ -124,6 +124,12 @@ async def register_document(db: Session, file: UploadFile, summary_type: str):
             persist_directory=CHROMA_PERSIST_DIR,
         )
         vectorstore.add_documents(splits)
+        
+                # 추가 메타데이터 계산
+        concept_count = summary.count("###")
+        keyword_count = len(keywords)
+        word_count = len(summary.split())
+        review_time_min = max(1, word_count // 50)
 
         # MySQL 저장
         document = file_crud.create_document(
@@ -131,7 +137,10 @@ async def register_document(db: Session, file: UploadFile, summary_type: str):
             uuid=file_uuid,
             name=file.filename,
             summary=summary,
-            keywords=keywords_str
+            keywords=keywords_str,
+            concept_cnt=concept_count,
+            keyword_cnt=keyword_count,
+            review_time=review_time_min
         )
 
         return DocumentSummaryDetail(
@@ -140,7 +149,9 @@ async def register_document(db: Session, file: UploadFile, summary_type: str):
             name=document.name,
             summary=document.summary,
             keywords=document.keywords.split(", ") if document.keywords else [],
-            top_sentences=top_sentences,
+            concept_cnt=concept_count,
+            keyword_cnt=keyword_count,
+            review_time=review_time_min,
             created_at=document.created_at,
         )
 
@@ -164,10 +175,12 @@ def list_documents(db: Session, limit: int, offset: int):
         results.append(
             DocumentSummaryItem(
                 id=document.id,
-                uuid=document.uuid,
                 name=document.name,
                 summary=document.summary,
                 keywords=document.keywords.split(", ") if document.keywords else [],
+                concept_cnt=document.concept_cnt,
+                keyword_cnt=document.keyword_cnt,
+                review_time=document.review_time,
                 created_at=document.created_at,
             )
         )

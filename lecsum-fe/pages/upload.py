@@ -4,8 +4,9 @@ import requests
 from pathlib import Path
 from datetime import datetime
 import html as _html
-from components.summary_card import render_summary_card_html
+import markdown as _markdown
 
+API_BASE_URL = "http://localhost:8000"  # 백엔드 주소
 
 def _md_to_html(md_text: str) -> str:
     """
@@ -18,19 +19,67 @@ def _md_to_html(md_text: str) -> str:
         return ""
 
     try:
-        import markdown as _markdown  # type: ignore
-
-        # Render markdown with inline HTML allowed
         return _markdown.markdown(
             md_text,
             extensions=["fenced_code", "tables"],
             output_format="html5",
         )
     except Exception:
-        # Fallback: simple newline rendering
         return md_text.replace("\n", "<br/>")
 
-API_BASE_URL = "http://localhost:8000"  # 백엔드 주소
+
+def render_summary_card_inline(
+    filename: str,
+    summary_html: str,
+    keywords: list[str],
+    concept_cnt: int,
+    keyword_cnt: int,
+    review_time: str,
+    created_at: str,
+):
+    """요약 카드 HTML 생성 (인라인)"""
+    
+    # 키워드 HTML
+    kw_html = "".join(
+        f'<span class="kw-chip">{_html.escape(k)}</span>'
+        for k in keywords
+    ) or '<span style="color: #6b7280;">키워드가 없습니다.</span>'
+    
+    return f"""
+    <div class="summary-card">
+        <div class="summary-header">
+            <div class="summary-badge">✨ AI 요약</div>
+            <div class="summary-title">{_html.escape(filename)}</div>
+            <div class="summary-date">📅 {created_at}</div>
+        </div>
+        
+        <div class="summary-section">
+            <h3>📝 요약 내용</h3>
+            <div class="summary-box">{summary_html}</div>
+        </div>
+        
+        <div class="summary-stats">
+            <div class="stat blue">
+                <div class="stat-value">{concept_cnt}</div>
+                <div>개념 수</div>
+            </div>
+            <div class="stat purple">
+                <div class="stat-value">{keyword_cnt}</div>
+                <div>키워드 수</div>
+            </div>
+            <div class="stat pink">
+                <div class="stat-value">{review_time}</div>
+                <div>예상 복습 시간</div>
+            </div>
+        </div>
+        
+        <div class="summary-keywords">
+            <h4>🔑 핵심 키워드</h4>
+            <div class="keyword-list">{kw_html}</div>
+        </div>
+    </div>
+    """
+
 
 def render_upload_page():
     # CSS 로드
@@ -87,29 +136,29 @@ def render_upload_page():
                     # 요약 결과 카드 UI
                     keywords = result["data"].get("keywords", [])
 
-                    created_at_text = datetime.now().strftime("%Y년 %m월 %d일 %p %I:%M")
+                    created_at_text = datetime.now().strftime("%Y년 %m월 %d일 %p %I:%M").replace("AM", "오전").replace("PM", "오후")
                     backend_created_at = result["data"].get("created_at")
                     if isinstance(backend_created_at, str) and backend_created_at.strip():
-                        created_at_text = backend_created_at
+                        try:
+                            dt = datetime.fromisoformat(backend_created_at)
+                            created_at_text = dt.strftime("%Y년 %m월 %d일 %p %I:%M").replace("AM", "오전").replace("PM", "오후")
+                        except Exception:
+                            created_at_text = backend_created_at
 
                     summary_html = _md_to_html(summary)
 
-                    # 키워드 칩 HTML
-                    kw_html = "".join(
-                        [f"<span class='kw-chip'>{_html.escape(str(k))}</span>" for k in keywords]
-                    )
-                    if not kw_html:
-                        kw_html = "<span style='color:#6b7280;'>키워드가 없습니다.</span>"
+                    concept_cnt = result["data"].get("concept_cnt", 0)
+                    keyword_cnt = len(keywords)
+                    review_time = f"{result['data'].get('review_time', 5)}분"
 
-                    word_count = len(summary.split())
-                    keyword_count = len(keywords)
-                    est_minutes = "5분"
-
-                    card_html = render_summary_card_html(
+                    card_html = render_summary_card_inline(
                         filename=uploaded_file.name,
                         summary_html=summary_html,
                         keywords=keywords,
-                        created_at=backend_created_at,
+                        concept_cnt=concept_cnt,
+                        keyword_cnt=keyword_cnt,
+                        review_time=review_time,
+                        created_at=created_at_text
                     )
 
                     st.markdown(card_html, unsafe_allow_html=True)

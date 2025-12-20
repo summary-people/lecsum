@@ -1,9 +1,30 @@
+/* ===== Streamlit 기본 요소 및 사이드바 숨김 ===== */
 header {
   visibility: hidden;
 }
 
 footer {
   visibility: hidden;
+}
+
+/* 사이드바 완전 숨김 */
+[data-testid="stSidebar"] {
+  display: none !important;
+}
+
+section[data-testid="stSidebar"] {
+  display: none !important;
+}
+
+.css-1d391kg {
+  display: none !important;
+}
+
+/* 메인 컨텐츠 전체 폭 사용 */
+.main .block-container {
+  max-width: 100% !important;
+  padding-left: 2rem !important;
+  padding-right: 2rem !important;
 }
 
 body,
@@ -33,6 +54,7 @@ body,
   display: flex;
   align-items: center;
   gap: 8px;
+  text-decoration: none;
 }
 
 .header-nav {
@@ -40,11 +62,17 @@ body,
   gap: 32px;
   font-size: 15px;
   font-weight: 600;
-  color: #374151;
 }
 
-.header-nav span {
+.header-nav a {
+  color: #374151;
+  text-decoration: none;
   cursor: pointer;
+  transition: color 0.2s;
+}
+
+.header-nav a:hover {
+  color: #7c3aed;
 }
 
 .page-offset {
@@ -125,21 +153,16 @@ body,
   display: inline-flex;
   align-items: center;
   gap: 8px;
-
   margin-top: 24px;
   padding: 12px 22px;
-
   font-size: 15px;
   font-weight: 700;
   text-decoration: none;
-
   border-radius: 999px;
   background: linear-gradient(135deg, #7c3aed, #a855f7);
   color: white;
-
   border: none;
   cursor: pointer;
-
   transition: all 0.25s ease;
 }
 

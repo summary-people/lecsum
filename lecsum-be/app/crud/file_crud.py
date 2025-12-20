@@ -9,12 +9,19 @@ def create_document(
     name: str,
     summary: str,
     keywords: str | None = None,
+    concept_cnt: int | None = None,
+    keyword_cnt: int | None = None,
+    review_time: int | None = None,
+    
 ):
     document = DocumentFile(
         uuid=uuid,
         name=name,
         summary=summary,
         keywords=keywords,
+        concept_cnt=concept_cnt,
+        keyword_cnt=keyword_cnt,
+        review_time=review_time,
     )
     db.add(document)
     db.commit()

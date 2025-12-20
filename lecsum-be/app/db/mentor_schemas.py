@@ -2,7 +2,7 @@
 from pydantic import BaseModel, Field
 from typing import List, Optional
 
-# 챗봇 질문 요청 (Chroma 기반, pdf_id는 MySQL 문서 id)
+# 챗봇 질문 요청 (Chroma 기반, document_id는 MySQL 문서 ID)
 class ChatRequest(BaseModel):
     document_id: Optional[int] = Field(default=None, description="PDF 문서 ID (MySQL id, 없으면 전체 검색)")
     question: str = Field(description="사용자의 질문")
@@ -25,9 +25,9 @@ class ChatResponse(BaseModel):
         description="답변의 근거가 된 문서 출처 (파일명, 페이지, 스니펫)"
     )
 
-# 오픈소스 자료 추천 요청 (MySQL 기반, pdf_id는 MySQL 문서 id)
+# 오픈소스 자료 추천 요청 (MySQL 기반, document_id는 MySQL 문서 ID)
 class RecommendRequest(BaseModel):
-    document_id: int = Field(description="PDF 문서 ID (MySQL id, 해당 PDF 내용을 분석하여 자동으로 관련 자료 추천)")
+    document_id: int = Field(description="PDF 문서 ID (MySQL id)")
 
 # 추천 자료 아이템
 class RecommendItem(BaseModel):

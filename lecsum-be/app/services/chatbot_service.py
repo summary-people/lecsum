@@ -43,11 +43,11 @@ async def chat_with_documents(request: ChatRequest, db: Session) -> ChatResponse
                 status_code=404,
                 detail="문서를 찾을 수 없습니다."
             )
-        # 특정 문서로 필터링
+        # 특정 문서로 필터링 (UUID 사용)
         vec_results = vectorstore.similarity_search(
             request.question,
             k=5,
-            filter={"document_uuid": request.document_id}
+            filter={"document_uuid": document.uuid}
         )
     else:
         # 전체 문서 검색
@@ -81,40 +81,9 @@ async def chat_with_documents(request: ChatRequest, db: Session) -> ChatResponse
     # 5. LLM 호출
     response = chatbot_llm.invoke(messages)
     
-    # ============================================================
-    # 6. 출처(sources) 정보 구성 (최대 3개)
-    # ============================================================
-    # ChatResponse의 sources 필드에 담을 정보를 생성
-    # - vec_results: Chroma에서 검색한 유사 문서 청크 리스트
-    # - 각 청크의 메타데이터에서 파일명, 페이지 번호 추출
-    # - 청크 내용(snippet)을 발췌하여 답변의 근거를 명확히 표시
-    # - RAG 시스템에서 "어디서 가져왔는지" 투명하게 공개
-    # - 상위 3개만 표시하여 응답 크기 최적화
-    # ============================================================
-    from app.db.mentor_schemas import SourceItem
-    
-    sources = []
-    for i, doc in enumerate(vec_results[:3]):  # 최대 3개로 제한
-        # Chroma에 저장된 메타데이터에서 파일명 추출
-        filename = doc.metadata.get('filename', '알 수 없는 파일')
-        
-        # 페이지 번호 추출 (PDF 로더가 제공하는 경우)
-        page = doc.metadata.get('page')
-        
-        # 청크 내용에서 스니펫 추출 (최대 150자)
-        snippet = doc.page_content[:150].strip()
-        if len(doc.page_content) > 150:
-            snippet += "..."
-        
-        sources.append(SourceItem(
-            filename=filename,
-            page=page,
-            snippet=snippet
-        ))
-    
     return ChatResponse(
         answer=response.content,
-        sources=sources  # 답변 근거가 된 문서 출처 리스트 (파일명, 페이지, 스니펫)
+        sources=[]  # 출처 정보 제외
     )
 
 async def recommend_resources(request: RecommendRequest, db: Session) -> RecommendResponse:
@@ -124,7 +93,7 @@ async def recommend_resources(request: RecommendRequest, db: Session) -> Recomme
     - Google Custom Search로 웹 자료 수집
     - LLM으로 구조화된 추천 생성
     """
-    # 1. MySQL에서 문서 및 키워드 조회
+    # 1. MySQL에서 문서 및 키워드 조회 (정수 ID 사용)
     document = file_crud.get_document_by_id(db, request.document_id)
     
     if not document:
@@ -133,10 +102,10 @@ async def recommend_resources(request: RecommendRequest, db: Session) -> Recomme
             detail="문서를 찾을 수 없습니다."
         )
     
-    # 2. 저장된 키워드 사용
+    # 2. MySQL에서 저장된 키워드 사용
     keywords = document.keywords if document.keywords else "학습 자료"
     
-    # 3. 벡터 DB에서 문서 내용 샘플링 (컨텍스트용)
+    # 3. Chroma에서 문서 내용 샘플링 (컨텍스트용)
     vectorstore = Chroma(
         collection_name=ChromaDB.COLLECTION_NAME.value,
         embedding_function=OpenAIEmbeddings(
@@ -176,7 +145,7 @@ async def recommend_resources(request: RecommendRequest, db: Session) -> Recomme
     
     user_prompt = build_recommendation_prompt(context_text, web_context, topic_instruction)
     
-    # 5. LLM 호출 (구조화된 출력)
+    # 6. LLM 호출 (구조화된 출력)
     structured_llm = chatOpenAI.with_structured_output(RecommendResponse)
     result = structured_llm.invoke([
         {"role": "system", "content": get_recommendation_system_prompt()},

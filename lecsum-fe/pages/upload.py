@@ -6,7 +6,7 @@ from datetime import datetime
 import html as _html
 import markdown as _markdown
 
-API_BASE_URL = "http://localhost:8000"  # 백엔드 주소
+API_BASE_URL = "http://localhost:8000"
 
 def _md_to_html(md_text: str) -> str:
     """

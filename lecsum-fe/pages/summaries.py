@@ -11,7 +11,7 @@ def render_summaries_page():
     css_dir = os.path.join(os.path.dirname(__file__), "..", "styles")
     
     all_css = ""
-    for css_name in ["summary.css", "upload.css", "summary_list.css"]:
+    for css_name in ["upload.css", "summary_list.css"]:
         css_path = os.path.join(css_dir, css_name)
         if os.path.exists(css_path):
             with open(css_path, "r", encoding="utf-8") as f:

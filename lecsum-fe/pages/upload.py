@@ -32,7 +32,6 @@ def render_upload_page():
     # CSS 로드
     css_dir = Path(__file__).parent.parent / "styles"
     upload_css = (css_dir / "upload.css").read_text()
-    summary_css = (css_dir / "summary.css").read_text()
     
     # 인라인 CSS 추가
     inline_css = """
@@ -169,7 +168,7 @@ def render_upload_page():
     </style>
     """
     
-    st.markdown(f"<style>{upload_css}\n{summary_css}</style>", unsafe_allow_html=True)
+    st.markdown(f"<style>{upload_css}</style>", unsafe_allow_html=True)
 
     # 헤더
     st.markdown("""

@@ -96,6 +96,7 @@ class APIClient:
 
         res = requests.post(url, json=payload, timeout=self.timeout)
         res.raise_for_status()
+        
         return res.json()
     
     def get_quiz_sets(self, document_id: int) -> Dict[str, Any]:

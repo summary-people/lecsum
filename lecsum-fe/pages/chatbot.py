@@ -28,6 +28,7 @@ def render_chatbot_page():
         st.warning("업로드된 문서가 없습니다. 먼저 문서를 업로드해주세요.")
         return
 
+    # 문서 이름 -> ID 매핑
     doc_options = {doc["name"]: doc["id"] for doc in documents}
 
     selected_name = st.selectbox(
@@ -44,7 +45,33 @@ def render_chatbot_page():
 
     st.info(f"선택된 문서: {selected_name}")
 
+    # 추천 자료 버튼
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("📚 추천 자료 보기", key="recommend_btn"):
+            with st.spinner("추천 자료를 찾는 중..."):
+                try:
+                    response = api_client.recommend_resources(st.session_state.selected_document_id)
+                    rec_data = response.get("data", {})
+                    
+                    st.subheader("📚 추천 자료")
+                    
+                    # 추천 이유 요약 표시
+                    if rec_data.get("summary"):
+                        st.markdown(f"**추천 이유:** {rec_data['summary']}")
+                    
+                    # 추천 자료 목록 표시
+                    if rec_data.get("recommendations"):
+                        for idx, item in enumerate(rec_data["recommendations"], 1):
+                            with st.expander(f"{idx}. {item.get('title', '제목 없음')}"):
+                                st.write(f"**유형:** {item.get('type', 'N/A')}")
+                                st.write(f"**설명:** {item.get('description', '')}")
+                                st.markdown(f"[바로가기]({item.get('url', '#')})")
+                except Exception as e:
+                    st.error(f"❌ 추천 자료를 불러올 수 없습니다: {str(e)}")
+
     # 대화 기록 표시
+    st.subheader("💬 대화")
     for chat in st.session_state.chat_history:
         with st.chat_message("user"):
             st.write(chat["question"])
@@ -55,16 +82,6 @@ def render_chatbot_page():
                 st.markdown(chat["answer"])
             else:
                 st.write(chat["answer"])
-            
-            # 출처 표시 (추천 자료가 아닌 경우만)
-            if chat.get("sources") and not chat.get("is_recommendation"):
-                with st.expander("📌 출처 보기"):
-                    for idx, source in enumerate(chat["sources"], 1):
-                        st.markdown(f"""
-                        **{idx}. {source['filename']}**
-                        - 페이지: {source.get('page', 'N/A')}
-                        - 내용: _{source['snippet']}_
-                        """)
     
     # 질문 입력
     question = st.chat_input("질문을 입력하세요...")

@@ -5,6 +5,7 @@ from pages.quiz import render_quiz_page
 from pages.summaries import render_summaries_page
 from pages.wrong_answer import render_wrong_notes_page
 from pages.chatbot import render_chatbot_page
+from pages.quiz_result import render_quiz_result_page
 
 page = st.query_params.get("page", "home")
 
@@ -33,8 +34,9 @@ def render_top_header():
                 <a href="/?page=upload">문서 업로드</a>
                 <a href="/?page=summaries">요약 문서</a>
                 <a href="/?page=mentor">AI 멘토</a>
-                <a href="/?page=quiz">모의고사</a>
+                <a href="/?page=quiz">AI 퀴즈</a>
                 <a href="/?page=wrong-notes">오답노트</a>
+                <a href="/?page=quiz-result">퀴즈 보관함</a>
             </div>
         </div>
         <div class="page-offset"></div>
@@ -46,7 +48,7 @@ def render_hero():
     st.markdown("<div class='main-title'>📖 Lecsum</div>", unsafe_allow_html=True)
     st.markdown("<div class='sub-title'>강의 자료를 스마트하게 학습하세요</div>", unsafe_allow_html=True)
     st.markdown(
-        "<div class='desc'>AI 기반 요약, 멘토링, 그리고 모의고사로 효율적인 학습을 지원합니다</div>",
+        "<div class='desc'>AI 기반 요약, 멘토링, 그리고 퀴즈로 효율적인 학습을 지원합니다</div>",
         unsafe_allow_html=True
     )
 
@@ -94,7 +96,7 @@ def render_cards():
             """
             <div class="card">
                 <div class="card-icon">📝</div>
-                <div class="card-title pink">모의고사</div>
+                <div class="card-title pink">AI 퀴즈</div>
                 <div class="card-desc">
                     문서 내용을 분석해 자동 생성된 문제로 학습 효과를 확인하세요.
                 </div>
@@ -109,7 +111,7 @@ def render_cards():
 
     st.markdown("<div style='height:32px'></div>", unsafe_allow_html=True)
 
-    col4, col5 = st.columns(2, gap="large")
+    col4, col5, col6 = st.columns(3, gap="large")
 
     with col4:
         st.markdown(
@@ -144,6 +146,24 @@ def render_cards():
         st.markdown('<div class="card-action">', unsafe_allow_html=True)
         if st.button("오답노트 →", key="wrong_notes_button"):
             st.query_params.update(page="wrong-notes")
+            st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
+    
+    with col6:
+        st.markdown(
+            '''
+            <div class="card">
+                <div class="card-icon">🗄️</div>
+                <div class="card-title pink">퀴즈 보관함</div>
+                <div class="card-desc">
+                    지금까지 생성된 퀴즈와 응시 기록을 한눈에 확인하고 관리하세요.
+                </div>
+            ''',
+            unsafe_allow_html=True
+        )
+        st.markdown('<div class="card-action">', unsafe_allow_html=True)
+        if st.button("기록 보기 →", key="quiz_result_button"):
+            st.query_params.update(page="quiz-result")
             st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
 
@@ -187,3 +207,6 @@ elif page == "summaries":
 
 elif page == "wrong-notes":
     render_wrong_notes_page()
+
+elif page == "quiz-result":
+    render_quiz_result_page()

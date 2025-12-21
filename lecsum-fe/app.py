@@ -15,7 +15,6 @@ st.set_page_config(
     layout="wide"
 )
 
-# CSS 주입 (외부 파일)
 def inject_base_css():
     base_dir = os.path.dirname(os.path.abspath(__file__))
     css_path = os.path.join(base_dir, "styles", "main.css")

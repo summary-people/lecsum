@@ -5,10 +5,12 @@ from typing import List
 # 문서 목록 조회
 class DocumentSummaryItem(BaseModel):
     id: int
-    uuid: str
     name: str
     summary: str
     keywords: List[str]
+    concept_cnt: int
+    keyword_cnt: int
+    review_time: int
     created_at: datetime
 
     class Config:
@@ -21,6 +23,9 @@ class DocumentSummaryDetail(BaseModel):
     name: str
     summary: str
     keywords: List[str]
+    concept_cnt: int
+    keyword_cnt: int
+    review_time: int
     created_at: datetime
 
     class Config:

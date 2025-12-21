@@ -13,6 +13,9 @@ class DocumentFile(Base):
     name = Column(String(255), nullable=False)
     summary = Column(Text, nullable=False)
     keywords = Column(Text)
+    concept_cnt = Column(Integer, default=0)
+    keyword_cnt = Column(Integer, default=0)
+    review_time = Column(Integer, default=0)
     created_at = Column(
         DateTime(timezone=True),
         server_default=func.now(),
